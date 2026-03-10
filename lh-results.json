@@ -1,0 +1,124 @@
+[
+  {
+    "page": "Login",
+    "path": "/login",
+    "score": 100,
+    "failedAudits": []
+  },
+  {
+    "page": "Dashboard",
+    "path": "/dashboard",
+    "score": 96,
+    "failedAudits": [
+      {
+        "id": "color-contrast",
+        "title": "Background and foreground colors do not have a sufficient contrast ratio.",
+        "score": 0,
+        "impact": "has-elements",
+        "items": [
+          "<button class=\"flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors b…\">",
+          "<div class=\"text-[10px] font-semibold uppercase tracking-wider mb-1.5 text-muted/50\">",
+          "<div class=\"text-[10px] font-semibold uppercase tracking-wider mb-1.5 text-accent\">"
+        ]
+      }
+    ]
+  },
+  {
+    "page": "My Week",
+    "path": "/my-week",
+    "score": 96,
+    "failedAudits": [
+      {
+        "id": "color-contrast",
+        "title": "Background and foreground colors do not have a sufficient contrast ratio.",
+        "score": 0,
+        "impact": "has-elements",
+        "items": [
+          "<span class=\"text-xs bg-accent/20 text-accent px-1.5 py-0.5 rounded\">",
+          "<span class=\"text-[11px] font-semibold text-muted/50 w-4 text-right shrink-0 mt-0.5\">",
+          "<span class=\"text-[11px] font-semibold text-muted/50 w-4 text-right shrink-0 mt-0.5\">"
+        ]
+      }
+    ]
+  },
+  {
+    "page": "Documents",
+    "path": "/docs",
+    "score": 100,
+    "failedAudits": []
+  },
+  {
+    "page": "Issues",
+    "path": "/issues",
+    "score": 100,
+    "failedAudits": []
+  },
+  {
+    "page": "Projects",
+    "path": "/projects",
+    "score": 96,
+    "failedAudits": [
+      {
+        "id": "color-contrast",
+        "title": "Background and foreground colors do not have a sufficient contrast ratio.",
+        "score": 0,
+        "impact": "has-elements",
+        "items": [
+          "<span class=\"ml-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-muted/30 text-muted\">",
+          "<span class=\"inline-flex items-center justify-center rounded bg-accent/20 px-2 py-0.5 t…\">",
+          "<span class=\"inline-flex items-center justify-center rounded bg-accent/20 px-2 py-0.5 t…\">"
+        ]
+      }
+    ]
+  },
+  {
+    "page": "Programs",
+    "path": "/programs",
+    "score": 100,
+    "failedAudits": []
+  },
+  {
+    "page": "Team Allocation",
+    "path": "/team/allocation",
+    "score": 96,
+    "failedAudits": [
+      {
+        "id": "color-contrast",
+        "title": "Background and foreground colors do not have a sufficient contrast ratio.",
+        "score": 0,
+        "impact": "has-elements",
+        "items": [
+          "<span class=\"text-xs font-medium text-accent\">"
+        ]
+      }
+    ]
+  },
+  {
+    "page": "Team Directory",
+    "path": "/team/directory",
+    "score": 100,
+    "failedAudits": []
+  },
+  {
+    "page": "Team Status",
+    "path": "/team/status",
+    "score": 96,
+    "failedAudits": [
+      {
+        "id": "color-contrast",
+        "title": "Background and foreground colors do not have a sufficient contrast ratio.",
+        "score": 0,
+        "impact": "has-elements",
+        "items": [
+          "<span class=\"text-xs font-medium text-accent\">"
+        ]
+      }
+    ]
+  },
+  {
+    "page": "Settings",
+    "path": "/settings",
+    "score": 100,
+    "failedAudits": []
+  }
+]

@@ -1,0 +1,16 @@
+Endpoint,Connections,P50_ms,P95_ms,P99_ms,Req_per_sec
+GET /api/documents,10,52,73,85,188
+GET /api/documents,25,126,151,258,192
+GET /api/documents,50,247,310,599,193
+GET /api/issues,10,28,39,43,345
+GET /api/issues,25,77,230,314,265
+GET /api/issues,50,149,193,356,318
+GET /api/dashboard/my-week,10,18,25,31,541
+GET /api/dashboard/my-week,25,51,62,66,495
+GET /api/dashboard/my-week,50,96,118,193,502
+GET /api/documents/:id/context,10,10,16,22,903
+GET /api/documents/:id/context,25,31,37,47,800
+GET /api/documents/:id/context,50,51,65,90,944
+GET /api/auth/me,10,12,18,40,803
+GET /api/auth/me,25,24,45,56,969
+GET /api/auth/me,50,44,71,112,1095
