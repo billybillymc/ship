@@ -118,12 +118,11 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     const userId = req.userId!;
     const workspaceId = req.workspaceId!;
 
-    // Get visibility context for filtering
-    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+    // Get visibility context for filtering (use cached value from auth middleware)
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId, req.isSuperAdmin || req.isWorkspaceAdmin);
 
     let query = `
       SELECT d.id, d.title, d.properties, d.ticket_number,
-             d.content,
              d.created_at, d.updated_at, d.created_by,
              d.started_at, d.completed_at, d.cancelled_at, d.reopened_at,
              d.converted_from_id,

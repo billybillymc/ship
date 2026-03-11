@@ -97,8 +97,8 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
     const userId = req.userId!;
     const workspaceId = req.workspaceId!;
 
-    // Check if user is admin (admins can see all documents)
-    const isAdmin = await isWorkspaceAdmin(userId, workspaceId);
+    // Use cached admin status from auth middleware to avoid redundant DB query
+    const isAdmin = req.isSuperAdmin || req.isWorkspaceAdmin || false;
 
     let query = `
       SELECT id, workspace_id, document_type, title, parent_id, position,
