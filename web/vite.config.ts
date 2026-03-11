@@ -84,6 +84,36 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: proxyConfig,
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-tiptap': [
+              '@tiptap/core',
+              '@tiptap/react',
+              '@tiptap/starter-kit',
+              '@tiptap/extension-collaboration',
+              '@tiptap/extension-collaboration-cursor',
+              '@tiptap/extension-table',
+              '@tiptap/extension-table-row',
+              '@tiptap/extension-table-cell',
+              '@tiptap/extension-table-header',
+              '@tiptap/extension-task-list',
+              '@tiptap/extension-task-item',
+              '@tiptap/extension-link',
+              '@tiptap/extension-placeholder',
+              '@tiptap/extension-code-block-lowlight',
+              '@tiptap/extension-mention',
+              '@tiptap/extension-dropcursor',
+            ],
+            'vendor-yjs': ['yjs', 'y-websocket', 'y-indexeddb'],
+            'vendor-query': ['@tanstack/react-query', '@tanstack/react-query-persist-client'],
+            'vendor-dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+          },
+        },
+      },
+    },
     // Preview server config - used by `vite preview` for E2E tests
     // This is MUCH lighter weight than the dev server (no HMR, no watchers)
     preview: {
