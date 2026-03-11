@@ -4,12 +4,13 @@ import { z } from 'zod';
 import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../middleware/visibility.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { logAuditEvent } from '../services/audit.js';
+import type { ProgramRow, SqlParam } from '../types/database.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
 
 // Helper to extract program from row
-function extractProgramFromRow(row: any) {
+function extractProgramFromRow(row: ProgramRow) {
   const props = row.properties || {};
   return {
     id: row.id,
@@ -223,7 +224,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
 
     const currentProps = existing.rows[0].properties || {};
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: SqlParam[] = [];
     let paramIndex = 1;
 
     const data = parsed.data;

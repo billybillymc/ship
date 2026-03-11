@@ -3,6 +3,7 @@ import { pool } from '../db/client.js';
 import { z } from 'zod';
 import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../middleware/visibility.js';
 import { authMiddleware } from '../middleware/auth.js';
+import type { IssueRow, SqlParam } from '../types/database.js';
 import {
   logDocumentChange,
   getTimestampUpdates,
@@ -79,7 +80,7 @@ const rejectIssueSchema = z.object({
 });
 
 // Helper to extract issue properties from row (without belongs_to - added separately)
-function extractIssueFromRow(row: any) {
+function extractIssueFromRow(row: IssueRow) {
   const props = row.properties || {};
   return {
     id: row.id,
@@ -704,7 +705,7 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
     const existingIssue = existing.rows[0];
     const currentProps = existingIssue.properties || {};
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: SqlParam[] = [];
     let paramIndex = 1;
 
     const data = parsed.data;
@@ -1206,7 +1207,7 @@ router.post('/bulk', authMiddleware, async (req: Request, res: Response) => {
         }
 
         const setClauses: string[] = ['updated_at = NOW()'];
-        const values: any[] = [validIds, workspaceId];
+        const values: SqlParam[] = [validIds, workspaceId];
         let paramIdx = 3;
 
         if (updates.state !== undefined) {
