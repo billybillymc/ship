@@ -22,11 +22,18 @@ export async function isWorkspaceAdmin(userId: string, workspaceId: string): Pro
  * - All workspace-visible documents to be seen by everyone
  * - Private documents to be seen only by their creator
  * - Admins to see all documents
+ *
+ * If cachedIsAdmin is provided (from auth middleware's req.isWorkspaceAdmin),
+ * the DB query is skipped entirely.
  */
 export async function getVisibilityContext(
   userId: string,
-  workspaceId: string
+  workspaceId: string,
+  cachedIsAdmin?: boolean
 ): Promise<{ isAdmin: boolean }> {
+  if (cachedIsAdmin !== undefined) {
+    return { isAdmin: cachedIsAdmin };
+  }
   const isAdmin = await isWorkspaceAdmin(userId, workspaceId);
   return { isAdmin };
 }

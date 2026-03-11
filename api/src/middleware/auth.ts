@@ -11,6 +11,7 @@ declare global {
       userId?: string;
       workspaceId?: string;
       isSuperAdmin?: boolean;
+      isWorkspaceAdmin?: boolean; // True when user has admin role in the workspace
       isApiToken?: boolean; // True when authenticated via API token
     }
   }
@@ -182,7 +183,7 @@ export async function authMiddleware(
     // Verify user still has access to the workspace (unless super-admin)
     if (session.workspace_id && !session.is_super_admin) {
       const membershipResult = await pool.query(
-        'SELECT id FROM workspace_memberships WHERE workspace_id = $1 AND user_id = $2',
+        'SELECT id, role FROM workspace_memberships WHERE workspace_id = $1 AND user_id = $2',
         [session.workspace_id, session.user_id]
       );
 
@@ -199,6 +200,8 @@ export async function authMiddleware(
         });
         return;
       }
+
+      req.isWorkspaceAdmin = membershipResult.rows[0].role === 'admin';
     }
 
     // Update last activity

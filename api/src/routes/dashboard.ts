@@ -44,8 +44,8 @@ router.get('/my-work', authMiddleware, async (req: Request, res: Response) => {
     const userId = req.userId!;
     const workspaceId = req.workspaceId!;
 
-    // Get visibility context for filtering
-    const { isAdmin } = await getVisibilityContext(userId, workspaceId);
+    // Get visibility context for filtering (use cached value from auth middleware to skip redundant query)
+    const { isAdmin } = await getVisibilityContext(userId, workspaceId, req.isSuperAdmin || req.isWorkspaceAdmin);
 
     // Get workspace sprint configuration to calculate current sprint number
     const workspaceResult = await pool.query(
@@ -85,34 +85,102 @@ router.get('/my-work', authMiddleware, async (req: Request, res: Response) => {
 
     const workItems: WorkItem[] = [];
 
-    // 1. Get issues assigned to current user (not done/cancelled)
-    const issuesResult = await pool.query(
-      `SELECT d.id, d.title, d.properties, d.ticket_number,
-              sprint_assoc.related_id as sprint_id,
-              sprint.title as sprint_name,
-              (sprint.properties->>'sprint_number')::int as sprint_number,
-              p.title as program_name
-       FROM documents d
-       LEFT JOIN document_associations sprint_assoc ON sprint_assoc.document_id = d.id AND sprint_assoc.relationship_type = 'sprint'
-       LEFT JOIN documents sprint ON sprint.id = sprint_assoc.related_id AND sprint.document_type = 'sprint'
-       LEFT JOIN document_associations prog_da ON d.id = prog_da.document_id AND prog_da.relationship_type = 'program'
-       LEFT JOIN documents p ON prog_da.related_id = p.id AND p.document_type = 'program'
-       WHERE d.workspace_id = $1
-         AND d.document_type = 'issue'
-         AND (d.properties->>'assignee_id')::uuid = $2
-         AND d.properties->>'state' NOT IN ('done', 'cancelled')
-         AND ${VISIBILITY_FILTER_SQL('d', '$3', '$4')}
-       ORDER BY
-         CASE d.properties->>'priority'
-           WHEN 'urgent' THEN 1
-           WHEN 'high' THEN 2
-           WHEN 'medium' THEN 3
-           WHEN 'low' THEN 4
-           ELSE 5
-         END,
-         d.updated_at DESC`,
-      [workspaceId, userId, userId, isAdmin]
-    );
+    // Run all 3 entity queries in parallel (they're independent of each other)
+    const [issuesResult, projectsResult, sprintsResult] = await Promise.all([
+      // 1. Get issues assigned to current user (not done/cancelled)
+      pool.query(
+        `SELECT d.id, d.title, d.properties, d.ticket_number,
+                sprint_assoc.related_id as sprint_id,
+                sprint.title as sprint_name,
+                (sprint.properties->>'sprint_number')::int as sprint_number,
+                p.title as program_name
+         FROM documents d
+         LEFT JOIN document_associations sprint_assoc ON sprint_assoc.document_id = d.id AND sprint_assoc.relationship_type = 'sprint'
+         LEFT JOIN documents sprint ON sprint.id = sprint_assoc.related_id AND sprint.document_type = 'sprint'
+         LEFT JOIN document_associations prog_da ON d.id = prog_da.document_id AND prog_da.relationship_type = 'program'
+         LEFT JOIN documents p ON prog_da.related_id = p.id AND p.document_type = 'program'
+         WHERE d.workspace_id = $1
+           AND d.document_type = 'issue'
+           AND (d.properties->>'assignee_id')::uuid = $2
+           AND d.properties->>'state' NOT IN ('done', 'cancelled')
+           AND ${VISIBILITY_FILTER_SQL('d', '$3', '$4')}
+         ORDER BY
+           CASE d.properties->>'priority'
+             WHEN 'urgent' THEN 1
+             WHEN 'high' THEN 2
+             WHEN 'medium' THEN 3
+             WHEN 'low' THEN 4
+             ELSE 5
+           END,
+           d.updated_at DESC`,
+        [workspaceId, userId, userId, isAdmin]
+      ),
+
+      // 2. Get projects owned by current user (not archived)
+      pool.query(
+        `SELECT d.id, d.title, d.properties,
+                p.title as program_name,
+                CASE
+                  WHEN d.archived_at IS NOT NULL THEN 'archived'
+                  ELSE COALESCE(
+                    (
+                      SELECT
+                        CASE MAX(
+                          CASE
+                            WHEN CURRENT_DATE BETWEEN
+                              (w.sprint_start_date + ((sprint.properties->>'sprint_number')::int - 1) * 7)
+                              AND (w.sprint_start_date + ((sprint.properties->>'sprint_number')::int - 1) * 7 + 6)
+                            THEN 3
+                            WHEN CURRENT_DATE < (w.sprint_start_date + ((sprint.properties->>'sprint_number')::int - 1) * 7)
+                            THEN 2
+                            ELSE 1
+                          END
+                        )
+                        WHEN 3 THEN 'active'
+                        WHEN 2 THEN 'planned'
+                        WHEN 1 THEN 'completed'
+                        ELSE NULL
+                        END
+                      FROM documents issue
+                      JOIN document_associations sprint_assoc ON sprint_assoc.document_id = issue.id AND sprint_assoc.relationship_type = 'sprint'
+                      JOIN documents sprint ON sprint.id = sprint_assoc.related_id AND sprint.document_type = 'sprint'
+                      JOIN document_associations proj_assoc ON proj_assoc.document_id = issue.id AND proj_assoc.relationship_type = 'project'
+                      JOIN workspaces w ON w.id = d.workspace_id
+                      WHERE proj_assoc.related_id = d.id
+                        AND issue.document_type = 'issue'
+                    ),
+                    'backlog'
+                  )
+                END as inferred_status
+         FROM documents d
+         LEFT JOIN document_associations prog_da ON d.id = prog_da.document_id AND prog_da.relationship_type = 'program'
+         LEFT JOIN documents p ON prog_da.related_id = p.id AND p.document_type = 'program'
+         WHERE d.workspace_id = $1
+           AND d.document_type = 'project'
+           AND (d.properties->>'owner_id')::uuid = $2
+           AND d.archived_at IS NULL
+           AND ${VISIBILITY_FILTER_SQL('d', '$3', '$4')}
+         ORDER BY d.updated_at DESC`,
+        [workspaceId, userId, userId, isAdmin]
+      ),
+
+      // 3. Get active sprints owned by current user
+      pool.query(
+        `SELECT d.id, d.title, d.properties,
+                p.title as program_name,
+                (d.properties->>'sprint_number')::int as sprint_number
+         FROM documents d
+         JOIN document_associations prog_da ON d.id = prog_da.document_id AND prog_da.relationship_type = 'program'
+         JOIN documents p ON prog_da.related_id = p.id AND p.document_type = 'program'
+         WHERE d.workspace_id = $1
+           AND d.document_type = 'sprint'
+           AND (d.properties->>'owner_id')::uuid = $2
+           AND (d.properties->>'sprint_number')::int = $3
+           AND ${VISIBILITY_FILTER_SQL('d', '$4', '$5')}
+         ORDER BY p.title`,
+        [workspaceId, userId, currentSprintNumber, userId, isAdmin]
+      ),
+    ]);
 
     for (const row of issuesResult.rows) {
       const props = row.properties || {};
@@ -144,54 +212,6 @@ router.get('/my-work', authMiddleware, async (req: Request, res: Response) => {
       });
     }
 
-    // 2. Get projects owned by current user (not archived)
-    const projectsResult = await pool.query(
-      `SELECT d.id, d.title, d.properties,
-              p.title as program_name,
-              CASE
-                WHEN d.archived_at IS NOT NULL THEN 'archived'
-                ELSE COALESCE(
-                  (
-                    SELECT
-                      CASE MAX(
-                        CASE
-                          WHEN CURRENT_DATE BETWEEN
-                            (w.sprint_start_date + ((sprint.properties->>'sprint_number')::int - 1) * 7)
-                            AND (w.sprint_start_date + ((sprint.properties->>'sprint_number')::int - 1) * 7 + 6)
-                          THEN 3
-                          WHEN CURRENT_DATE < (w.sprint_start_date + ((sprint.properties->>'sprint_number')::int - 1) * 7)
-                          THEN 2
-                          ELSE 1
-                        END
-                      )
-                      WHEN 3 THEN 'active'
-                      WHEN 2 THEN 'planned'
-                      WHEN 1 THEN 'completed'
-                      ELSE NULL
-                      END
-                    FROM documents issue
-                    JOIN document_associations sprint_assoc ON sprint_assoc.document_id = issue.id AND sprint_assoc.relationship_type = 'sprint'
-                    JOIN documents sprint ON sprint.id = sprint_assoc.related_id AND sprint.document_type = 'sprint'
-                    JOIN document_associations proj_assoc ON proj_assoc.document_id = issue.id AND proj_assoc.relationship_type = 'project'
-                    JOIN workspaces w ON w.id = d.workspace_id
-                    WHERE proj_assoc.related_id = d.id
-                      AND issue.document_type = 'issue'
-                  ),
-                  'backlog'
-                )
-              END as inferred_status
-       FROM documents d
-       LEFT JOIN document_associations prog_da ON d.id = prog_da.document_id AND prog_da.relationship_type = 'program'
-       LEFT JOIN documents p ON prog_da.related_id = p.id AND p.document_type = 'program'
-       WHERE d.workspace_id = $1
-         AND d.document_type = 'project'
-         AND (d.properties->>'owner_id')::uuid = $2
-         AND d.archived_at IS NULL
-         AND ${VISIBILITY_FILTER_SQL('d', '$3', '$4')}
-       ORDER BY d.updated_at DESC`,
-      [workspaceId, userId, userId, isAdmin]
-    );
-
     for (const row of projectsResult.rows) {
       const props = row.properties || {};
       const impact = props.impact !== undefined ? props.impact : null;
@@ -216,23 +236,6 @@ router.get('/my-work', authMiddleware, async (req: Request, res: Response) => {
         program_name: row.program_name,
       });
     }
-
-    // 3. Get active sprints owned by current user
-    const sprintsResult = await pool.query(
-      `SELECT d.id, d.title, d.properties,
-              p.title as program_name,
-              (d.properties->>'sprint_number')::int as sprint_number
-       FROM documents d
-       JOIN document_associations prog_da ON d.id = prog_da.document_id AND prog_da.relationship_type = 'program'
-       JOIN documents p ON prog_da.related_id = p.id AND p.document_type = 'program'
-       WHERE d.workspace_id = $1
-         AND d.document_type = 'sprint'
-         AND (d.properties->>'owner_id')::uuid = $2
-         AND (d.properties->>'sprint_number')::int = $3
-         AND ${VISIBILITY_FILTER_SQL('d', '$4', '$5')}
-       ORDER BY p.title`,
-      [workspaceId, userId, currentSprintNumber, userId, isAdmin]
-    );
 
     for (const row of sprintsResult.rows) {
       workItems.push({
@@ -320,34 +323,24 @@ router.get('/my-focus', authMiddleware, async (req: Request, res: Response) => {
     const userId = req.userId!;
     const workspaceId = req.workspaceId!;
 
-    // 1. Look up the user's person document
-    const personResult = await pool.query(
-      `SELECT id, title FROM documents
-       WHERE workspace_id = $1 AND document_type = 'person'
-         AND (properties->>'user_id') = $2
+    // 1+2. Look up person document AND workspace sprint config in one query
+    const contextResult = await pool.query(
+      `SELECT d.id as person_id, w.sprint_start_date
+       FROM documents d
+       JOIN workspaces w ON w.id = $1
+       WHERE d.workspace_id = $1 AND d.document_type = 'person'
+         AND (d.properties->>'user_id') = $2
        LIMIT 1`,
       [workspaceId, userId]
     );
 
-    if (personResult.rows.length === 0) {
+    if (contextResult.rows.length === 0) {
       res.status(404).json({ error: 'Person not found for current user' });
       return;
     }
 
-    const personId = personResult.rows[0].id;
-
-    // 2. Get workspace sprint configuration
-    const workspaceResult = await pool.query(
-      `SELECT sprint_start_date FROM workspaces WHERE id = $1`,
-      [workspaceId]
-    );
-
-    if (workspaceResult.rows.length === 0) {
-      res.status(404).json({ error: 'Workspace not found' });
-      return;
-    }
-
-    const rawStartDate = workspaceResult.rows[0].sprint_start_date;
+    const personId = contextResult.rows[0].person_id;
+    const rawStartDate = contextResult.rows[0].sprint_start_date;
     const sprintDuration = 7;
 
     let workspaceStartDate: Date;
@@ -393,21 +386,39 @@ router.get('/my-focus', authMiddleware, async (req: Request, res: Response) => {
 
     const projectIds = allocationsResult.rows.map(r => r.project_id);
 
-    // 4. Get weekly plans for current AND previous week for these projects
-    let plansResult = { rows: [] as { id: string; content: unknown; properties: Record<string, unknown> }[] };
-    if (projectIds.length > 0) {
-      plansResult = await pool.query(
-        `SELECT id, content, properties
-         FROM documents
-         WHERE workspace_id = $1
-           AND document_type = 'weekly_plan'
-           AND (properties->>'person_id') = $2
-           AND (properties->>'project_id') = ANY($3)
-           AND (properties->>'week_number')::int IN ($4, $5)
-           AND deleted_at IS NULL`,
-        [workspaceId, personId, projectIds, currentWeekNumber, previousWeekNumber]
-      );
-    }
+    // 4+5. Fetch plans and activity in parallel (both depend on projectIds)
+    const emptyPlans = { rows: [] as { id: string; content: unknown; properties: Record<string, unknown> }[] };
+    const emptyActivity = { rows: [] as { id: string; title: string; ticket_number: number; state: string; updated_at: string; project_id: string }[] };
+
+    const [plansResult, activityResult] = projectIds.length > 0
+      ? await Promise.all([
+          pool.query(
+            `SELECT id, content, properties
+             FROM documents
+             WHERE workspace_id = $1
+               AND document_type = 'weekly_plan'
+               AND (properties->>'person_id') = $2
+               AND (properties->>'project_id') = ANY($3)
+               AND (properties->>'week_number')::int IN ($4, $5)
+               AND deleted_at IS NULL`,
+            [workspaceId, personId, projectIds, currentWeekNumber, previousWeekNumber]
+          ),
+          pool.query(
+            `SELECT d.id, d.title, d.ticket_number,
+                    COALESCE(d.properties->>'state', 'backlog') as state,
+                    d.updated_at,
+                    proj_assoc.related_id as project_id
+             FROM documents d
+             JOIN document_associations proj_assoc ON proj_assoc.document_id = d.id AND proj_assoc.relationship_type = 'project'
+             WHERE d.workspace_id = $1
+               AND d.document_type = 'issue'
+               AND proj_assoc.related_id = ANY($2)
+               AND d.updated_at >= NOW() - INTERVAL '7 days'
+             ORDER BY d.updated_at DESC`,
+            [workspaceId, projectIds]
+          ),
+        ])
+      : [emptyPlans, emptyActivity];
 
     // Build plan lookup: `${projectId}_${weekNumber}` -> plan
     const planMap = new Map<string, { id: string; items: PlanItem[] }>();
@@ -418,25 +429,6 @@ router.get('/my-focus', authMiddleware, async (req: Request, res: Response) => {
         id: row.id,
         items: extractPlanItems(row.content),
       });
-    }
-
-    // 5. Get recent activity: issues associated with each project updated in last 7 days
-    let activityResult = { rows: [] as { id: string; title: string; ticket_number: number; state: string; updated_at: string; project_id: string }[] };
-    if (projectIds.length > 0) {
-      activityResult = await pool.query(
-        `SELECT d.id, d.title, d.ticket_number,
-                COALESCE(d.properties->>'state', 'backlog') as state,
-                d.updated_at,
-                proj_assoc.related_id as project_id
-         FROM documents d
-         JOIN document_associations proj_assoc ON proj_assoc.document_id = d.id AND proj_assoc.relationship_type = 'project'
-         WHERE d.workspace_id = $1
-           AND d.document_type = 'issue'
-           AND proj_assoc.related_id = ANY($2)
-           AND d.updated_at >= NOW() - INTERVAL '7 days'
-         ORDER BY d.updated_at DESC`,
-        [workspaceId, projectIds]
-      );
     }
 
     // Group activity by project
@@ -500,35 +492,25 @@ router.get('/my-week', authMiddleware, async (req: Request, res: Response) => {
     const userId = req.userId!;
     const workspaceId = req.workspaceId!;
 
-    // 1. Look up the user's person document
-    const personResult = await pool.query(
-      `SELECT id, title FROM documents
-       WHERE workspace_id = $1 AND document_type = 'person'
-         AND (properties->>'user_id') = $2
+    // 1+2. Look up person document AND workspace sprint config in one query
+    const contextResult = await pool.query(
+      `SELECT d.id as person_id, d.title as person_name, w.sprint_start_date
+       FROM documents d
+       JOIN workspaces w ON w.id = $1
+       WHERE d.workspace_id = $1 AND d.document_type = 'person'
+         AND (d.properties->>'user_id') = $2
        LIMIT 1`,
       [workspaceId, userId]
     );
 
-    if (personResult.rows.length === 0) {
+    if (contextResult.rows.length === 0) {
       res.status(404).json({ error: 'Person not found for current user' });
       return;
     }
 
-    const personId = personResult.rows[0].id;
-    const personName = personResult.rows[0].title;
-
-    // 2. Get workspace sprint configuration
-    const workspaceResult = await pool.query(
-      `SELECT sprint_start_date FROM workspaces WHERE id = $1`,
-      [workspaceId]
-    );
-
-    if (workspaceResult.rows.length === 0) {
-      res.status(404).json({ error: 'Workspace not found' });
-      return;
-    }
-
-    const rawStartDate = workspaceResult.rows[0].sprint_start_date;
+    const personId = contextResult.rows[0].person_id;
+    const personName = contextResult.rows[0].person_name;
+    const rawStartDate = contextResult.rows[0].sprint_start_date;
     const sprintDuration = 7;
 
     let workspaceStartDate: Date;
@@ -563,80 +545,56 @@ router.get('/my-week', authMiddleware, async (req: Request, res: Response) => {
     const weekEnd = new Date(weekStart);
     weekEnd.setUTCDate(weekEnd.getUTCDate() + sprintDuration - 1);
 
-    // 3. Fetch plan for target week (by person_id + week_number only)
-    const planResult = await pool.query(
-      `SELECT id, title, content, properties, created_at, updated_at
+    // 3-5. Fetch plan, retro, and previous retro in a single query
+    const weekDocsResult = await pool.query(
+      `SELECT id, title, content, properties, document_type, (properties->>'week_number')::int as week_num
        FROM documents
        WHERE workspace_id = $1
-         AND document_type = 'weekly_plan'
          AND (properties->>'person_id') = $2
-         AND (properties->>'week_number')::int = $3
          AND archived_at IS NULL
          AND deleted_at IS NULL
-       LIMIT 1`,
-      [workspaceId, personId, targetWeekNumber]
+         AND (
+           (document_type = 'weekly_plan' AND (properties->>'week_number')::int = $3)
+           OR (document_type = 'weekly_retro' AND (properties->>'week_number')::int IN ($3, $4))
+         )`,
+      [workspaceId, personId, targetWeekNumber, previousWeekNumber]
     );
 
-    const plan = planResult.rows.length > 0
-      ? {
-          id: planResult.rows[0].id,
-          title: planResult.rows[0].title,
-          submitted_at: planResult.rows[0].properties?.submitted_at || null,
-          items: extractPlanItems(planResult.rows[0].content),
-        }
-      : null;
+    // Parse results by type and week number
+    let plan = null;
+    let retro = null;
+    let previousRetro: { id: string | null; title: string | null; submitted_at: string | null; week_number: number } | null = null;
 
-    // 4. Fetch retro for target week
-    const retroResult = await pool.query(
-      `SELECT id, title, content, properties, created_at, updated_at
-       FROM documents
-       WHERE workspace_id = $1
-         AND document_type = 'weekly_retro'
-         AND (properties->>'person_id') = $2
-         AND (properties->>'week_number')::int = $3
-         AND archived_at IS NULL
-         AND deleted_at IS NULL
-       LIMIT 1`,
-      [workspaceId, personId, targetWeekNumber]
-    );
-
-    const retro = retroResult.rows.length > 0
-      ? {
-          id: retroResult.rows[0].id,
-          title: retroResult.rows[0].title,
-          submitted_at: retroResult.rows[0].properties?.submitted_at || null,
-          items: extractPlanItems(retroResult.rows[0].content),
-        }
-      : null;
-
-    // 5. Fetch previous week retro (for "incomplete retro" nudge)
-    let previousRetro = null;
-    if (previousWeekNumber > 0) {
-      const prevRetroResult = await pool.query(
-        `SELECT id, title, properties
-         FROM documents
-         WHERE workspace_id = $1
-           AND document_type = 'weekly_retro'
-           AND (properties->>'person_id') = $2
-           AND (properties->>'week_number')::int = $3
-           AND archived_at IS NULL
-           AND deleted_at IS NULL
-         LIMIT 1`,
-        [workspaceId, personId, previousWeekNumber]
-      );
-
-      previousRetro = prevRetroResult.rows.length > 0
-        ? {
-            id: prevRetroResult.rows[0].id,
-            title: prevRetroResult.rows[0].title,
-            submitted_at: prevRetroResult.rows[0].properties?.submitted_at || null,
-            week_number: previousWeekNumber,
-          }
-        : { id: null, title: null, submitted_at: null, week_number: previousWeekNumber };
+    for (const row of weekDocsResult.rows) {
+      if (row.document_type === 'weekly_plan' && row.week_num === targetWeekNumber) {
+        plan = {
+          id: row.id,
+          title: row.title,
+          submitted_at: row.properties?.submitted_at || null,
+          items: extractPlanItems(row.content),
+        };
+      } else if (row.document_type === 'weekly_retro' && row.week_num === targetWeekNumber) {
+        retro = {
+          id: row.id,
+          title: row.title,
+          submitted_at: row.properties?.submitted_at || null,
+          items: extractPlanItems(row.content),
+        };
+      } else if (row.document_type === 'weekly_retro' && row.week_num === previousWeekNumber) {
+        previousRetro = {
+          id: row.id,
+          title: row.title,
+          submitted_at: row.properties?.submitted_at || null,
+          week_number: previousWeekNumber,
+        };
+      }
     }
 
-    // 6. Fetch standups for the 7 days of the target week
-    // Compute the 7 dates
+    if (previousWeekNumber > 0 && !previousRetro) {
+      previousRetro = { id: null, title: null, submitted_at: null, week_number: previousWeekNumber };
+    }
+
+    // 6+7. Fetch standups and allocations in parallel (independent queries)
     const standupDates: string[] = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(weekStart);
@@ -645,17 +603,36 @@ router.get('/my-week', authMiddleware, async (req: Request, res: Response) => {
       standupDates.push(dateStr);
     }
 
-    const standupsResult = await pool.query(
-      `SELECT id, title, properties, created_at, updated_at
-       FROM documents
-       WHERE workspace_id = $1
-         AND document_type = 'standup'
-         AND (properties->>'author_id') = $2
-         AND (properties->>'date') = ANY($3)
-         AND deleted_at IS NULL
-       ORDER BY (properties->>'date') ASC`,
-      [workspaceId, userId, standupDates]
-    );
+    const [standupsResult, allocationsResult] = await Promise.all([
+      pool.query(
+        `SELECT id, title, properties, created_at, updated_at
+         FROM documents
+         WHERE workspace_id = $1
+           AND document_type = 'standup'
+           AND (properties->>'author_id') = $2
+           AND (properties->>'date') = ANY($3)
+           AND deleted_at IS NULL
+         ORDER BY (properties->>'date') ASC`,
+        [workspaceId, userId, standupDates]
+      ),
+      pool.query(
+        `SELECT DISTINCT
+           proj.id as project_id,
+           proj.title as project_title,
+           prog.title as program_name
+         FROM documents s
+         JOIN documents proj ON (s.properties->>'project_id')::uuid = proj.id AND proj.document_type = 'project'
+         LEFT JOIN document_associations prog_da ON proj.id = prog_da.document_id AND prog_da.relationship_type = 'program'
+         LEFT JOIN documents prog ON prog_da.related_id = prog.id AND prog.document_type = 'program'
+         WHERE s.workspace_id = $1
+           AND s.document_type = 'sprint'
+           AND s.properties->'assignee_ids' ? $2
+           AND (s.properties->>'sprint_number')::int = $3
+           AND s.deleted_at IS NULL
+           AND proj.archived_at IS NULL`,
+        [workspaceId, personId, targetWeekNumber]
+      ),
+    ]);
 
     // Build standup map by date
     const standupMap = new Map<string, { id: string; title: string; date: string; created_at: string }>();
@@ -679,25 +656,6 @@ router.get('/my-week', authMiddleware, async (req: Request, res: Response) => {
         ? { date, day: dayOfWeek, standup }
         : { date, day: dayOfWeek, standup: null };
     });
-
-    // 7. Fetch project allocations for the target week
-    const allocationsResult = await pool.query(
-      `SELECT DISTINCT
-         proj.id as project_id,
-         proj.title as project_title,
-         prog.title as program_name
-       FROM documents s
-       JOIN documents proj ON (s.properties->>'project_id')::uuid = proj.id AND proj.document_type = 'project'
-       LEFT JOIN document_associations prog_da ON proj.id = prog_da.document_id AND prog_da.relationship_type = 'program'
-       LEFT JOIN documents prog ON prog_da.related_id = prog.id AND prog.document_type = 'program'
-       WHERE s.workspace_id = $1
-         AND s.document_type = 'sprint'
-         AND s.properties->'assignee_ids' ? $2
-         AND (s.properties->>'sprint_number')::int = $3
-         AND s.deleted_at IS NULL
-         AND proj.archived_at IS NULL`,
-      [workspaceId, personId, targetWeekNumber]
-    );
 
     const projects = allocationsResult.rows.map(row => ({
       id: row.project_id,
