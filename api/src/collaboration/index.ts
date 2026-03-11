@@ -182,8 +182,12 @@ function schedulePersist(docName: string, doc: Y.Doc) {
   const existing = pendingSaves.get(docName);
   if (existing) clearTimeout(existing);
 
-  pendingSaves.set(docName, setTimeout(() => {
-    persistDocument(docName, doc);
+  pendingSaves.set(docName, setTimeout(async () => {
+    try {
+      await persistDocument(docName, doc);
+    } catch (err) {
+      console.error('[Collab] schedulePersist failed for', docName, err);
+    }
     pendingSaves.delete(docName);
   }, 2000));
 }
@@ -745,7 +749,7 @@ export function setupCollaboration(server: Server) {
       handleMessage(ws, new Uint8Array(data), docName, doc, aw);
     });
 
-    ws.on('close', () => {
+    ws.on('close', async () => {
       const conn = conns.get(ws);
       if (conn) {
         awarenessProtocol.removeAwarenessStates(aw, [conn.awarenessClientId], null);
@@ -762,11 +766,15 @@ export function setupCollaboration(server: Server) {
       });
 
       if (!hasConnections) {
-        // Final persist before cleanup
+        // Final persist before cleanup — await to prevent data loss
         const pending = pendingSaves.get(docName);
         if (pending) {
           clearTimeout(pending);
-          persistDocument(docName, doc);
+          try {
+            await persistDocument(docName, doc);
+          } catch (err) {
+            console.error('[Collab] Final persist failed on close for', docName, err);
+          }
           pendingSaves.delete(docName);
         }
 

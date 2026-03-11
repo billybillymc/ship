@@ -71,7 +71,8 @@ export function MergeProgramDialog({ isOpen, onClose, sourceId, sourceName }: Me
           setPreview(data);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        console.error('[MergeProgram] Preview load failed:', err);
         if (!cancelled) setError('Failed to load preview');
       })
       .finally(() => {

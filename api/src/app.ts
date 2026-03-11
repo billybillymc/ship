@@ -241,5 +241,31 @@ export function createApp(corsOrigin: string = 'http://localhost:5173'): express
     console.warn('CAIA initialization failed:', err);
   });
 
+  // Catch-all error middleware — must be last middleware registered.
+  // Catches any unhandled errors thrown/rejected in route handlers.
+  // Without this, Express sends raw HTML stack traces (dev) or hangs (prod).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    // Don't interfere if response already started
+    if (res.headersSent) return;
+
+    // Respect status code set by middleware (e.g., CSRF returns 403)
+    const statusCode = err.status || err.statusCode || 500;
+
+    // Only log unexpected 500 errors, not expected 4xx middleware responses
+    if (statusCode >= 500) {
+      console.error('[Express] Unhandled route error:', err);
+    }
+
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        message: process.env.NODE_ENV === 'production' && statusCode >= 500
+          ? 'Internal server error'
+          : err.message || 'Internal server error',
+      },
+    });
+  });
+
   return app;
 }

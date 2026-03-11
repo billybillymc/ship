@@ -172,7 +172,10 @@ export function PlanQualityAssistant({
     quietGet('/api/ai/status')
       .then(r => r.json())
       .then(data => setAiAvailable(data.available))
-      .catch(() => setAiAvailable(false));
+      .catch((err: unknown) => {
+        console.error('[QualityAssistant] AI status check failed:', err);
+        setAiAvailable(false);
+      });
   }, []);
 
   // Analyze content by fetching latest from API
@@ -303,7 +306,10 @@ export function RetroQualityAssistant({
     quietGet('/api/ai/status')
       .then(r => r.json())
       .then(data => setAiAvailable(data.available))
-      .catch(() => setAiAvailable(false));
+      .catch((err: unknown) => {
+        console.error('[QualityAssistant] AI status check failed:', err);
+        setAiAvailable(false);
+      });
   }, []);
 
   // Analyze content by fetching latest from API

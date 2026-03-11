@@ -10,6 +10,20 @@ const __dirname = dirname(__filename);
 config({ path: join(__dirname, '../.env.local') });
 config({ path: join(__dirname, '../.env') });
 
+// Global error handlers — prevent silent crashes and unlogged failures
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('[FATAL] Unhandled promise rejection:', reason);
+  // Don't exit — log and continue. Most unhandled rejections are non-critical
+  // (e.g., failed background persist, closed WebSocket writes).
+});
+
+process.on('uncaughtException', (error: Error) => {
+  console.error('[FATAL] Uncaught exception:', error);
+  // Uncaught exceptions leave the process in an undefined state.
+  // Log, then exit gracefully so the process manager can restart.
+  process.exit(1);
+});
+
 async function main() {
   // Load secrets from SSM in production (before importing app)
   if (process.env.NODE_ENV === 'production') {

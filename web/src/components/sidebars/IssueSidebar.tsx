@@ -187,7 +187,8 @@ export function IssueSidebar({
           }
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        console.error('[IssueSidebar] Failed to fetch sprints:', err);
         if (!cancelled) {
           setSprints([]);
           setWorkspaceSprintStartDate(null);

@@ -152,7 +152,7 @@ export function PlanQualityBanner({
           persistedHashRef.current = doc.properties.ai_analysis.content_hash || null;
         }
       })
-      .catch(() => {});
+      .catch((err: unknown) => { console.error('[PlanQuality] Request failed:', err); });
 
     return () => {
       cancelled = true;
@@ -163,7 +163,7 @@ export function PlanQualityBanner({
   const persistAnalysis = useCallback((data: PlanAnalysisResult) => {
     quietPatch(`/api/documents/${documentId}`, {
       properties: { ai_analysis: data },
-    }).catch(() => {});
+    }).catch((err: unknown) => { console.error('[PlanQuality] Request failed:', err); });
   }, [documentId]);
 
   // Run analysis (called on content change AND on initial load)
@@ -195,7 +195,7 @@ export function PlanQualityBanner({
           persistAnalysis(data);
         }
       })
-      .catch(() => {})
+      .catch((err: unknown) => { console.error('[PlanQuality] Request failed:', err); })
       .finally(() => {
         if (thisRequestId !== requestIdRef.current) return;
         setLoading(false);
@@ -218,7 +218,7 @@ export function PlanQualityBanner({
         if (cancelled) return;
         if (doc?.content) runAnalysis(doc.content);
       })
-      .catch(() => {});
+      .catch((err: unknown) => { console.error('[PlanQuality] Request failed:', err); });
     return () => {
       cancelled = true;
     };
@@ -398,7 +398,7 @@ export function RetroQualityBanner({
           setPlanContent({ type: 'doc', content: [] });
         }
       })
-      .catch(() => {});
+      .catch((err: unknown) => { console.error('[PlanQuality] Request failed:', err); });
 
     return () => {
       cancelled = true;
@@ -408,7 +408,7 @@ export function RetroQualityBanner({
   const persistAnalysis = useCallback((data: RetroAnalysis) => {
     quietPatch(`/api/documents/${documentId}`, {
       properties: { ai_analysis: data },
-    }).catch(() => {});
+    }).catch((err: unknown) => { console.error('[PlanQuality] Request failed:', err); });
   }, [documentId]);
 
   const runAnalysis = useCallback(async (retroContent: Record<string, unknown>, plan: Record<string, unknown>) => {
@@ -439,7 +439,7 @@ export function RetroQualityBanner({
           persistAnalysis(data);
         }
       })
-      .catch(() => {})
+      .catch((err: unknown) => { console.error('[PlanQuality] Request failed:', err); })
       .finally(() => {
         if (thisRequestId !== requestIdRef.current) return;
         setLoading(false);
@@ -462,7 +462,7 @@ export function RetroQualityBanner({
         if (cancelled) return;
         if (doc?.content) runAnalysis(doc.content, planContent);
       })
-      .catch(() => {});
+      .catch((err: unknown) => { console.error('[PlanQuality] Request failed:', err); });
     return () => {
       cancelled = true;
     };
