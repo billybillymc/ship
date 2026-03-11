@@ -10,8 +10,8 @@ export default {
         foreground: '#f5f5f5',
         muted: '#8a8a8a', // Changed from #737373 (4.09:1) to #8a8a8a (5.1:1 contrast)
         border: '#262626',
-        accent: '#005ea2', // Logo blue
-        'accent-hover': '#0071bc', // Lighter blue for hover
+        accent: '#4a90d9', // Adjusted from #005ea2 for WCAG AA (5.6:1 on #0d0d0d)
+        'accent-hover': '#5a9ee0', // Lighter blue for hover
       },
       fontFamily: {
         sans: [
