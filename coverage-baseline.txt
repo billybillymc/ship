@@ -1,0 +1,23 @@
+# Coverage Baseline — Category 5 (Test Coverage)
+# Measured: 2026-03-10T15:39:20-05:00
+# Branch: category_5 (starting from master)
+
+## API Tests
+- Test files: 28 passed / 28 total
+- Tests: 451 passed / 451 total
+- Overall coverage: 40.34% statements, 33.44% branches, 40.9% functions, 40.52% lines
+- Collaboration coverage: 8.53% statements, 2.42% branches, 6.52% functions, 8.83% lines
+- Dashboard route coverage: 1.98% statements, 0% branches, 0% functions, 2.04% lines
+
+## Web Tests
+- Test files: 13 passed, 3 failed / 16 total
+- Tests: 105 passed, 12 failed / 117 total
+- Failures:
+  - document-tabs.test.ts: 9 failures (tab config changes since tests were written)
+  - DetailsExtension.test.ts: 3 failures (prosemirror node type 'detailsSummary' not found)
+  - useSessionTimeout.test.ts: 0 tests (empty/setup issue)
+
+## Notes
+- @ship/shared needed to be built (pnpm --filter @ship/shared build) before API tests would pass
+- Vitest 4.x uses --maxWorkers=1 instead of --workers=1
+- No html-encoding-sniffer ESM crash observed — web tests run with jsdom

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+
+// Mock apiPost before importing the hook
+vi.mock('@/lib/api', () => ({
+  apiPost: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 import { useSessionTimeout } from './useSessionTimeout';
 
 /**

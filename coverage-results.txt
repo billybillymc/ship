@@ -1,0 +1,48 @@
+# Coverage Results — Category 5 (Test Coverage)
+# Measured: 2026-03-10T20:54:54-05:00
+# Branch: category_5
+
+## API Tests
+- Test files: 29 passed / 29 total (was 28/28 — added dashboard.test.ts)
+- Tests: 479 passed / 479 total (was 451 — added 28 new tests)
+- Overall coverage: 41.85% statements (was 40.34%, +1.51%)
+
+### Collaboration module coverage
+- Before: 8.53% statements, 2.42% branches, 6.52% functions, 8.83% lines
+- After:  9.60% statements, 3.63% branches, 8.69% functions, 9.94% lines
+- Note: Most collaboration logic is in internal (non-exported) functions that require
+  a full WebSocket server to exercise. Tests cover exported functions + behavior patterns.
+- Target was 30%+ — not met due to architecture (internal functions, module-level side effects)
+
+### Dashboard route coverage  
+- Before: 1.98% statements, 0% branches, 0% functions, 2.04% lines
+- After:  60.89% statements, 18.75% branches, 58.33% functions, 62.24% lines
+- Target was 20%+ — EXCEEDED (60.89% vs 20% target)
+
+## Web Tests
+- Before: 13 passed, 3 failed / 16 total (105 passed, 12 failed / 117 tests)
+- After:  16 passed, 0 failed / 16 total (151 passed, 0 failed / 151 tests)
+- Fixed: document-tabs.test.ts (tab configs updated), DetailsExtension.test.ts (missing child nodes),
+         useSessionTimeout.test.ts (apiPost mock added)
+
+## Summary of Changes
+1. Fixed web test suite (T1-T2): 
+   - document-tabs.test.ts: Updated tab expectations (sprints→weeks, tab order changed, sprint has tabs now)
+   - DetailsExtension.test.ts: Added DetailsSummary+DetailsContent to editor extensions, fixed content assertion
+   - useSessionTimeout.test.ts: Added vi.mock for @/lib/api apiPost
+2. Added collaboration server tests (T3-T6):
+   - T3: persistDocument behavior (3 tests)
+   - T4: schedulePersist debounce (2 tests)
+   - T5: Connection close flush (3 tests)
+   - T6: Malformed message resilience (5 tests)
+   - Exported function tests (6 tests)
+3. Added dashboard route tests (T7-T9):
+   - T7: GET /api/dashboard/my-work (3 tests)
+   - T8: GET /api/dashboard/my-week (3 tests)
+   - T9: GET /api/dashboard/my-focus (3 tests)
+
+## Targets Assessment
+- ✅ 3 critical paths covered (dashboard my-work, my-week, my-focus)
+- ✅ Web tests execute and all pass (151/151)
+- ⚠️ Collaboration 8.53%→9.60% (target 30%+ not met — internal functions need WebSocket integration tests)
+- ✅ Dashboard 1.98%→60.89% (target 20%+ exceeded)
