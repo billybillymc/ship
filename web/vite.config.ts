@@ -89,6 +89,8 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            // tiptap and yjs must be in the same chunk — they have circular imports
+            // that cause "Cannot access 'v' before initialization" if split
             'vendor-tiptap': [
               '@tiptap/core',
               '@tiptap/react',
@@ -106,8 +108,10 @@ export default defineConfig(({ mode }) => {
               '@tiptap/extension-code-block-lowlight',
               '@tiptap/extension-mention',
               '@tiptap/extension-dropcursor',
+              'yjs',
+              'y-websocket',
+              'y-indexeddb',
             ],
-            'vendor-yjs': ['yjs', 'y-websocket', 'y-indexeddb'],
             'vendor-query': ['@tanstack/react-query', '@tanstack/react-query-persist-client'],
             'vendor-dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
           },
