@@ -113,9 +113,11 @@ export type IssueState = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'don
 
 /** Row with issue state from a query (used in filter callbacks) */
 export interface IssueStateRow {
+  id?: string;
+  title?: string;
+  ticket_number?: number;
   state: IssueState | string;
   properties?: Record<string, unknown>;
-  [key: string]: unknown;
 }
 
 /** TipTap document node structure */

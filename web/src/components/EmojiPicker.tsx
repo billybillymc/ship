@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { EmojiClickData } from 'emoji-picker-react';
+import type { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/cn';
 
 const LazyEmojiPicker = React.lazy(() => import('emoji-picker-react'));
@@ -79,7 +79,7 @@ export function EmojiPickerPopover({ value, onChange, children, className }: Emo
               <LazyEmojiPicker
                 onEmojiClick={handleEmojiClick}
                 skinTonesDisabled={true}
-                theme="dark"
+                theme={"dark" as Theme}
                 height={350}
                 width={300}
                 searchPlaceholder="Search emoji..."

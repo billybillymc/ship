@@ -19,9 +19,9 @@ type InferredProjectStatus = 'active' | 'planned' | 'completed' | 'backlog' | 'a
 function extractProjectFromRow(row: ProjectRow) {
   const props = row.properties || {};
   // ICE values can be null (not yet set) - don't default to 3
-  const impact = props.impact !== undefined ? props.impact : null;
-  const confidence = props.confidence !== undefined ? props.confidence : null;
-  const ease = props.ease !== undefined ? props.ease : null;
+  const impact = (props.impact !== undefined ? props.impact : null) as number | null;
+  const confidence = (props.confidence !== undefined ? props.confidence : null) as number | null;
+  const ease = (props.ease !== undefined ? props.ease : null) as number | null;
 
   return {
     id: row.id,
@@ -32,7 +32,7 @@ function extractProjectFromRow(row: ProjectRow) {
     ease,
     ice_score: computeICEScore(impact, confidence, ease),
     // Visual properties
-    color: props.color || DEFAULT_PROJECT_PROPERTIES.color,
+    color: (props.color as string) || DEFAULT_PROJECT_PROPERTIES.color,
     emoji: props.emoji || null,
     // Associations
     program_id: row.program_id || null,
@@ -47,8 +47,8 @@ function extractProjectFromRow(row: ProjectRow) {
       email: row.owner_email,
     } : null,
     // Counts
-    sprint_count: parseInt(row.sprint_count) || 0,
-    issue_count: parseInt(row.issue_count) || 0,
+    sprint_count: parseInt(row.sprint_count as string) || 0,
+    issue_count: parseInt(row.issue_count as string) || 0,
     // Completeness flags
     is_complete: props.is_complete ?? null,
     missing_fields: props.missing_fields ?? [],
@@ -121,7 +121,7 @@ const projectRetroSchema = z.object({
 });
 
 // Helper to generate pre-filled retro content for a project
-async function generatePrefilledRetroContent(projectData: ProjectRow, sprints: IssueStateRow[], issues: IssueStateRow[]) {
+async function generatePrefilledRetroContent(projectData: ProjectRow, sprints: Array<{ sprint_number?: string; title?: string }>, issues: IssueStateRow[]) {
   const props = projectData.properties || {};
 
   // Categorize issues by state
@@ -148,9 +148,9 @@ async function generatePrefilledRetroContent(projectData: ProjectRow, sprints: I
   };
 
   // Add ICE Score section
-  const impact = props.impact;
-  const confidence = props.confidence;
-  const ease = props.ease;
+  const impact = (props.impact ?? null) as number | null;
+  const confidence = (props.confidence ?? null) as number | null;
+  const ease = (props.ease ?? null) as number | null;
   const iceScore = (impact !== null && confidence !== null && ease !== null)
     ? impact * confidence * ease
     : null;
@@ -206,7 +206,7 @@ async function generatePrefilledRetroContent(projectData: ProjectRow, sprints: I
         type: 'listItem',
         content: [{
           type: 'paragraph',
-          content: [{ type: 'text', text: `Week ${s.sprint_number}: ${s.title}` }],
+          content: [{ type: 'text', text: `Week ${s.sprint_number || ''}: ${s.title || ''}` }],
         }],
       })),
     });
@@ -223,7 +223,7 @@ async function generatePrefilledRetroContent(projectData: ProjectRow, sprints: I
       type: 'bulletList',
       content: completedIssues.map(i => ({
         type: 'listItem',
-        content: [{ type: 'paragraph', content: [{ type: 'text', text: i.title }] }],
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: String(i.title || '') }] }],
       })),
     });
   }
@@ -239,7 +239,7 @@ async function generatePrefilledRetroContent(projectData: ProjectRow, sprints: I
       type: 'bulletList',
       content: activeIssues.map(i => ({
         type: 'listItem',
-        content: [{ type: 'paragraph', content: [{ type: 'text', text: `${i.title} (${i.state})` }] }],
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: `${String(i.title || '')} (${i.state})` }] }],
       })),
     });
   }
@@ -255,7 +255,7 @@ async function generatePrefilledRetroContent(projectData: ProjectRow, sprints: I
       type: 'bulletList',
       content: cancelledIssues.map(i => ({
         type: 'listItem',
-        content: [{ type: 'paragraph', content: [{ type: 'text', text: i.title }] }],
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: String(i.title || '') }] }],
       })),
     });
   }

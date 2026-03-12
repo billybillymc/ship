@@ -202,9 +202,9 @@ function extractSprintFromRow(row: SprintRow) {
     program_accountable_id: row.program_accountable_id || null,
     owner_reports_to: row.owner_reports_to || null,
     workspace_sprint_start_date: row.workspace_sprint_start_date,
-    issue_count: parseInt(row.issue_count) || 0,
-    completed_count: parseInt(row.completed_count) || 0,
-    started_count: parseInt(row.started_count) || 0,
+    issue_count: parseInt(row.issue_count as string) || 0,
+    completed_count: parseInt(row.completed_count as string) || 0,
+    started_count: parseInt(row.started_count as string) || 0,
     has_plan: row.has_plan === true || row.has_plan === 't',
     has_retro: row.has_retro === true || row.has_retro === 't',
     // Retro outcome summary (populated if retro exists)
@@ -665,7 +665,7 @@ router.get('/my-week', authMiddleware, async (req: Request, res: Response) => {
     const groupedData: Record<string, {
       sprint: { id: string; name: string; sprint_number: number };
       program: { id: string; name: string; prefix: string } | null;
-      issues: IssueStateRow[];
+      issues: Array<IssueStateRow & { priority?: string; assignee_id?: string | null; assignee_name?: string; assignee_archived?: boolean; estimate?: number | null; display_id?: string; created_at?: string; updated_at?: string }>;
     }> = {};
 
     for (const row of result.rows) {
@@ -1875,7 +1875,7 @@ router.get('/:id/standups', authMiddleware, async (req: Request, res: Response) 
     const standups = await Promise.all(
       result.rows.map(async (row) => {
         const formatted = formatStandupResponse(row);
-        formatted.content = await transformIssueLinks(formatted.content, workspaceId, issueMap);
+        formatted.content = await transformIssueLinks(formatted.content, workspaceId, issueMap) as Record<string, unknown> | null;
         return formatted;
       })
     );
@@ -2131,7 +2131,7 @@ async function generatePrefilledReviewContent(sprintData: { sprint_number: numbe
           type: 'listItem',
           content: [{
             type: 'paragraph',
-            content: [{ type: 'text', text: `#${i.ticket_number}: ${i.title}` }]
+            content: [{ type: 'text', text: `#${i.ticket_number || ''}: ${String(i.title || '')}` }]
           }]
         }))
       }
