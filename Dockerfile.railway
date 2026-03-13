@@ -29,34 +29,15 @@ RUN pnpm build:shared && pnpm --filter @ship/api build
 # Build web with empty VITE_API_URL (uses relative URLs → same-origin requests)
 RUN cd web && VITE_API_URL= npx vite build
 
+# Copy and prepare startup script
+COPY scripts/railway-start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Expose port (Railway sets PORT env var)
 EXPOSE ${PORT:-3000}
 
 ENV NODE_ENV=development
 ENV DATABASE_URL=postgresql://ship:ship_dev_password@localhost:5432/ship_dev
 ENV SESSION_SECRET=railway-dev-secret-change-in-production
-
-# Copy startup script
-COPY <<'STARTUP' /app/start.sh
-#!/bin/bash
-set -e
-
-# Start PostgreSQL
-pg_ctlcluster $(pg_lsclusters -h | awk '{print $1, $2}') start
-
-# Create database and user
-su - postgres -c "psql -c \"CREATE USER ship WITH PASSWORD 'ship_dev_password';\"" 2>/dev/null || true
-su - postgres -c "psql -c \"CREATE DATABASE ship_dev OWNER ship;\"" 2>/dev/null || true
-su - postgres -c "psql -c \"ALTER USER ship CREATEDB;\"" 2>/dev/null || true
-
-echo "PostgreSQL is ready"
-
-# Run migrations, seed, and start API
-cd /app/api
-node dist/db/migrate.js
-node dist/db/seed.js
-node dist/index.js
-STARTUP
-RUN chmod +x /app/start.sh
 
 CMD ["/app/start.sh"]
