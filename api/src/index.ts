@@ -1,6 +1,7 @@
 import { createServer } from 'http';
 import { config } from 'dotenv';
 import { join, dirname } from 'path';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -45,6 +46,22 @@ async function main() {
   server.timeout = 60000; // 60 seconds max request duration
   server.keepAliveTimeout = 65000; // 65 seconds (slightly longer than timeout)
   server.headersTimeout = 66000; // 66 seconds (slightly longer than keepAlive)
+
+  // Serve static frontend if web/dist exists (Railway single-service deployment)
+  const webDistPath = join(__dirname, '../../web/dist');
+  if (existsSync(webDistPath)) {
+    const express = await import('express');
+    // Serve static assets
+    app.use(express.default.static(webDistPath));
+    // SPA fallback: serve index.html for all non-API routes
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/collaboration') || req.path.startsWith('/events') || req.path === '/health') {
+        return next();
+      }
+      res.sendFile(join(webDistPath, 'index.html'));
+    });
+    console.log(`Serving static frontend from ${webDistPath}`);
+  }
 
   // Setup WebSocket collaboration server
   setupCollaboration(server);
