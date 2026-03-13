@@ -82,7 +82,7 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
       <div className="flex items-center gap-2">
         {reviewState.queueActive ? (
           <>
-            <span className="rounded bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent">
+            <span className="rounded bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
               {reviewState.queueIndex + 1} of {reviewState.queueLength}
             </span>
             <button
@@ -131,7 +131,7 @@ export function WeeklyReviewSubNav({ reviewState }: WeeklyReviewSubNavProps) {
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <Dialog.Title className="text-lg font-semibold text-foreground">Submit Review</Dialog.Title>
               <Dialog.Close className="rounded p-1 text-muted hover:bg-border hover:text-foreground" aria-label="Close">
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </Dialog.Close>

@@ -14,7 +14,7 @@ interface DocumentTreeItemProps {
 
 function DocumentIcon({ className }: { className?: string }) {
   return (
-    <svg
+    <svg aria-hidden="true" 
       className={cn('h-4 w-4', className)}
       fill="none"
       stroke="currentColor"
@@ -32,7 +32,7 @@ function DocumentIcon({ className }: { className?: string }) {
 
 function ChevronIcon({ isOpen, className }: { isOpen: boolean; className?: string }) {
   return (
-    <svg
+    <svg aria-hidden="true" 
       className={cn(
         'h-4 w-4 transition-transform',
         isOpen && 'rotate-90',
@@ -126,7 +126,7 @@ export function DocumentTreeItem({
               aria-label="Delete document"
               data-testid="delete-document-button"
             >
-              <svg
+              <svg aria-hidden="true" 
                 className="h-3.5 w-3.5"
                 fill="none"
                 stroke="currentColor"
@@ -154,7 +154,7 @@ export function DocumentTreeItem({
             onClick={() => onCreateChild(document.id)}
             aria-label="Add sub-document"
           >
-            <svg
+            <svg aria-hidden="true" 
               className="h-3.5 w-3.5 text-muted"
               fill="none"
               stroke="currentColor"

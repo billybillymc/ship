@@ -182,7 +182,7 @@ function WeekWindowCard({
         <div className="mt-2 flex items-center justify-between text-xs">
           <span className={cn(
             'rounded px-1.5 py-0.5 whitespace-nowrap',
-            status === 'active' ? 'bg-accent/20 text-accent' : sprintStatusColors[status]
+            status === 'active' ? 'bg-accent/10 text-accent' : sprintStatusColors[status]
           )}>
             {status.charAt(0).toUpperCase() + status.slice(1)}
           </span>
