@@ -1,10 +1,13 @@
-# Railway deployment: single container serving API + static frontend
+# Railway deployment: single container with Postgres + API + static frontend
 FROM node:20-slim
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@10
+# Install PostgreSQL and pnpm
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql postgresql-client \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g pnpm@10
 
 # Copy workspace config and all package.json files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
@@ -30,8 +33,30 @@ RUN cd web && VITE_API_URL= npx vite build
 EXPOSE ${PORT:-3000}
 
 ENV NODE_ENV=development
+ENV DATABASE_URL=postgresql://ship:ship_dev_password@localhost:5432/ship_dev
+ENV SESSION_SECRET=railway-dev-secret-change-in-production
 
-# Start: run migrations, seed data, then start API
-# The API will also serve the static frontend via express.static
-WORKDIR /app/api
-CMD ["sh", "-c", "node dist/db/migrate.js && node dist/db/seed.js && node dist/index.js"]
+# Copy startup script
+COPY <<'STARTUP' /app/start.sh
+#!/bin/bash
+set -e
+
+# Start PostgreSQL
+pg_ctlcluster $(pg_lsclusters -h | awk '{print $1, $2}') start
+
+# Create database and user
+su - postgres -c "psql -c \"CREATE USER ship WITH PASSWORD 'ship_dev_password';\"" 2>/dev/null || true
+su - postgres -c "psql -c \"CREATE DATABASE ship_dev OWNER ship;\"" 2>/dev/null || true
+su - postgres -c "psql -c \"ALTER USER ship CREATEDB;\"" 2>/dev/null || true
+
+echo "PostgreSQL is ready"
+
+# Run migrations, seed, and start API
+cd /app/api
+node dist/db/migrate.js
+node dist/db/seed.js
+node dist/index.js
+STARTUP
+RUN chmod +x /app/start.sh
+
+CMD ["/app/start.sh"]
