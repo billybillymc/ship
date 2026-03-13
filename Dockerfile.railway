@@ -29,9 +29,9 @@ RUN pnpm build:shared && pnpm --filter @ship/api build
 # Build web with empty VITE_API_URL (uses relative URLs → same-origin requests)
 RUN cd web && VITE_API_URL= npx vite build
 
-# Copy and prepare startup script
+# Copy and prepare startup script (sed fixes Windows CRLF line endings)
 COPY scripts/railway-start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
 
 # Expose port (Railway sets PORT env var)
 EXPOSE ${PORT:-3000}
