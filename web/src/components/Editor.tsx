@@ -202,6 +202,10 @@ export function Editor({
   // Flag to distinguish local vs remote title changes
   const isRemoteTitleUpdateRef = useRef(false);
 
+  // Stable ref for the remote title change callback to avoid observer churn
+  const onRemoteTitleChangeRef = useRef(onRemoteTitleChange);
+  onRemoteTitleChangeRef.current = onRemoteTitleChange;
+
   // Seed the Y.Map with the initial title once the provider syncs
   // and observe remote title changes from other users
   useEffect(() => {
@@ -215,7 +219,7 @@ export function Editor({
           const displayTitle = remoteTitle === 'Untitled' ? '' : remoteTitle;
           setTitle(displayTitle);
           // Notify parent to invalidate list caches so sidebar titles update
-          onRemoteTitleChange?.(remoteTitle as string);
+          onRemoteTitleChangeRef.current?.(remoteTitle as string);
           isRemoteTitleUpdateRef.current = false;
         }
       }
@@ -225,7 +229,7 @@ export function Editor({
     return () => {
       metaMap.unobserve(observer);
     };
-  }, [metaMap, onRemoteTitleChange]);
+  }, [metaMap]);
 
   // Seed the Y.Map title from initialTitle on first sync
   // (server loads title into Y.Map on doc creation, but also handle initial prop)
