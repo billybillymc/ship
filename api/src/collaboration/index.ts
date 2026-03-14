@@ -166,13 +166,24 @@ async function persistDocument(docName: string, doc: Y.Doc) {
       goals: goals,
     };
 
-    // Persist yjs_state, content (JSON backup), and updated properties
+    // Persist yjs_state, content (JSON backup), updated properties, and title
     // The content column is kept in sync with yjs_state to serve as a fallback
     // and to support API reads that don't go through the collaboration server
-    await pool.query(
-      `UPDATE documents SET yjs_state = $1, content = $2, properties = $3, updated_at = now() WHERE id = $4`,
-      [Buffer.from(state), JSON.stringify(content), JSON.stringify(updatedProps), docId]
-    );
+    // Title is synced via Y.Map('meta') for real-time collaboration
+    const meta = doc.getMap('meta');
+    const yjsTitle = meta.get('title') as string | undefined;
+
+    if (yjsTitle && yjsTitle !== 'Untitled') {
+      await pool.query(
+        `UPDATE documents SET yjs_state = $1, content = $2, properties = $3, title = $5, updated_at = now() WHERE id = $4`,
+        [Buffer.from(state), JSON.stringify(content), JSON.stringify(updatedProps), docId, yjsTitle]
+      );
+    } else {
+      await pool.query(
+        `UPDATE documents SET yjs_state = $1, content = $2, properties = $3, updated_at = now() WHERE id = $4`,
+        [Buffer.from(state), JSON.stringify(content), JSON.stringify(updatedProps), docId]
+      );
+    }
   } catch (err) {
     console.error('Failed to persist document:', err);
   }
@@ -208,7 +219,7 @@ async function getOrCreateDoc(docName: string): Promise<Y.Doc> {
 
   try {
     const result = await pool.query(
-      'SELECT yjs_state, content FROM documents WHERE id = $1',
+      'SELECT yjs_state, content, title FROM documents WHERE id = $1',
       [docId]
     );
 
@@ -257,6 +268,16 @@ async function getOrCreateDoc(docName: string): Promise<Y.Doc> {
       }
     } else {
       console.log(`[Collaboration] No content found for ${docName}, starting with empty document`);
+    }
+
+    // Seed the title into the Y.Map so collaborators get it via Yjs sync
+    if (result.rows[0]?.title) {
+      const meta = doc.getMap('meta');
+      if (!meta.has('title')) {
+        doc.transact(() => {
+          meta.set('title', result.rows[0].title);
+        });
+      }
     }
   } catch (err) {
     console.error(`[Collaboration] Failed to load document ${docName}:`, err);

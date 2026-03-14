@@ -187,35 +187,52 @@ export function Editor({
   const [title, setTitle] = useState(initialTitle === 'Untitled' ? '' : initialTitle);
   const titleInputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Track if user has made local changes (to prevent stale server responses from overwriting)
-  const hasLocalChangesRef = useRef(false);
-  const lastSyncedTitleRef = useRef(initialTitle);
-
   // CRITICAL: Create a new Y.Doc for each documentId using useMemo
   // This ensures the Y.Doc is atomically recreated when documentId changes,
   // preventing race conditions where the WebSocket provider might use a stale Y.Doc
   // that contains content from a different document (cross-document contamination bug)
   const ydoc = useMemo(() => new Y.Doc(), [documentId]);
 
-  // Sync title when initialTitle prop changes (e.g., from context update)
-  // Only update if user hasn't made local changes (prevents stale responses from overwriting)
+  // Use Y.Map for real-time title sync across all collaborators
+  const metaMap = useMemo(() => ydoc.getMap('meta'), [ydoc]);
+
+  // Flag to distinguish local vs remote title changes
+  const isRemoteTitleUpdateRef = useRef(false);
+
+  // Seed the Y.Map with the initial title once the provider syncs
+  // and observe remote title changes from other users
+  useEffect(() => {
+    // Observe remote title changes from other collaborators
+    const observer = (event: Y.YMapEvent<unknown>, transaction: Y.Transaction) => {
+      if (transaction.local) return; // Ignore our own changes
+      if (event.keysChanged.has('title')) {
+        const remoteTitle = metaMap.get('title') as string | undefined;
+        if (remoteTitle !== undefined) {
+          isRemoteTitleUpdateRef.current = true;
+          const displayTitle = remoteTitle === 'Untitled' ? '' : remoteTitle;
+          setTitle(displayTitle);
+          // No need to call onTitleChange for remote updates —
+          // the collaboration server persists the title from the Y.Map
+          isRemoteTitleUpdateRef.current = false;
+        }
+      }
+    };
+    metaMap.observe(observer);
+
+    return () => {
+      metaMap.unobserve(observer);
+    };
+  }, [metaMap]);
+
+  // Seed the Y.Map title from initialTitle on first sync
+  // (server loads title into Y.Map on doc creation, but also handle initial prop)
   useEffect(() => {
     const newTitle = initialTitle === 'Untitled' ? '' : initialTitle;
-    // Only update if this is a genuinely new value from server
-    // AND user hasn't made local changes since
-    if (!hasLocalChangesRef.current && initialTitle !== lastSyncedTitleRef.current) {
+    // Only update local state if we haven't received a Yjs title yet
+    if (!metaMap.has('title')) {
       setTitle(newTitle);
-      lastSyncedTitleRef.current = initialTitle;
     }
-  }, [initialTitle]);
-
-  // Reset local changes flag after save completes (parent will update initialTitle)
-  useEffect(() => {
-    if (initialTitle === title || (initialTitle === 'Untitled' && title === '')) {
-      hasLocalChangesRef.current = false;
-      lastSyncedTitleRef.current = initialTitle;
-    }
-  }, [initialTitle, title]);
+  }, [initialTitle, metaMap]);
 
   // Auto-resize title textarea when title changes or on mount
   useEffect(() => {
@@ -805,13 +822,15 @@ export function Editor({
     };
   }, [editor, onPlanChange]);
 
-  // Handle title changes
+  // Handle title changes - sync via Yjs for real-time collaboration
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newTitle = e.target.value;
-    hasLocalChangesRef.current = true; // Mark as having local changes to prevent stale overwrites
     setTitle(newTitle);
+    // Write to Y.Map so all collaborators see the change in real-time
+    metaMap.set('title', newTitle || 'Untitled');
+    // Also persist via REST API (throttled by parent)
     onTitleChange?.(newTitle);
-  }, [onTitleChange]);
+  }, [onTitleChange, metaMap]);
 
   return (
     <div className="flex h-full flex-col">
