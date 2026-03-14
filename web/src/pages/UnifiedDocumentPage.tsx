@@ -301,6 +301,20 @@ export function UnifiedDocumentPage() {
     await deleteMutation.mutateAsync(id);
   }, [deleteMutation, id]);
 
+  // Invalidate list caches when a remote collaborator changes the title
+  const handleRemoteTitleChange = useCallback((newTitle: string) => {
+    if (!id || !document?.document_type) return;
+    // Update the cached document data optimistically
+    queryClient.setQueryData(['document', id], (prev: Record<string, unknown> | undefined) =>
+      prev ? { ...prev, title: newTitle } : prev
+    );
+    // Invalidate list queries so sidebar/workspace lists show updated title
+    queryClient.invalidateQueries({ queryKey: [document.document_type + 's', 'list'] });
+    if (document.document_type === 'wiki') {
+      queryClient.invalidateQueries({ queryKey: ['documents', 'wiki'] });
+    }
+  }, [id, document?.document_type, queryClient]);
+
   const isWeeklyDoc = document?.document_type === 'weekly_plan' || document?.document_type === 'weekly_retro';
   const isStandup = document?.document_type === 'standup';
   const hideBackButton = isWeeklyDoc || isStandup;
@@ -527,6 +541,7 @@ export function UnifiedDocumentPage() {
       onDelete={handleDelete}
       showTypeSelector={true}
       titleSuffix={standupAuthorName}
+      onRemoteTitleChange={handleRemoteTitleChange}
     />
   );
 }

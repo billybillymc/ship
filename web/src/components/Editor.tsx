@@ -88,6 +88,8 @@ interface EditorProps {
   aiScoringAnalysis?: { planAnalysis?: unknown; retroAnalysis?: unknown } | null;
   /** Suffix displayed after the title in the header (e.g., author name) */
   titleSuffix?: string;
+  /** Callback when a remote collaborator changes the title (for cache invalidation) */
+  onRemoteTitleChange?: (newTitle: string) => void;
 }
 
 type SyncStatus = 'connecting' | 'cached' | 'synced' | 'disconnected';
@@ -183,6 +185,7 @@ export function Editor({
   onContentChange,
   aiScoringAnalysis,
   titleSuffix,
+  onRemoteTitleChange,
 }: EditorProps) {
   const [title, setTitle] = useState(initialTitle === 'Untitled' ? '' : initialTitle);
   const titleInputRef = useRef<HTMLTextAreaElement>(null);
@@ -211,8 +214,8 @@ export function Editor({
           isRemoteTitleUpdateRef.current = true;
           const displayTitle = remoteTitle === 'Untitled' ? '' : remoteTitle;
           setTitle(displayTitle);
-          // No need to call onTitleChange for remote updates —
-          // the collaboration server persists the title from the Y.Map
+          // Notify parent to invalidate list caches so sidebar titles update
+          onRemoteTitleChange?.(remoteTitle as string);
           isRemoteTitleUpdateRef.current = false;
         }
       }
@@ -222,7 +225,7 @@ export function Editor({
     return () => {
       metaMap.unobserve(observer);
     };
-  }, [metaMap]);
+  }, [metaMap, onRemoteTitleChange]);
 
   // Seed the Y.Map title from initialTitle on first sync
   // (server loads title into Y.Map on doc creation, but also handle initial prop)

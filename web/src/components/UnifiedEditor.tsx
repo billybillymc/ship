@@ -164,6 +164,8 @@ interface UnifiedEditorProps {
   onTypeChange?: (newType: DocumentType) => Promise<void>;
   /** Suffix displayed after the title in the header (e.g., author name) */
   titleSuffix?: string;
+  /** Callback when a remote collaborator changes the title (for cache invalidation) */
+  onRemoteTitleChange?: (newTitle: string) => void;
 }
 
 /**
@@ -199,6 +201,7 @@ export function UnifiedEditor({
   showTypeSelector = false,
   onTypeChange,
   titleSuffix,
+  onRemoteTitleChange,
 }: UnifiedEditorProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -460,6 +463,7 @@ export function UnifiedEditor({
       onContentChange={isWeeklyDoc ? setEditorContent : undefined}
       aiScoringAnalysis={isWeeklyDoc ? aiScoringAnalysis : undefined}
       titleSuffix={titleSuffix}
+      onRemoteTitleChange={onRemoteTitleChange}
     />
   );
 }
