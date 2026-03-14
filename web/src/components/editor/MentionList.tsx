@@ -75,7 +75,7 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
       return (
         <>
           {label.slice(0, index)}
-          <span className="bg-accent/30 text-accent-foreground">
+          <span className="bg-accent/30 text-accent-foreground-foreground">
             {label.slice(index, index + query.length)}
           </span>
           {label.slice(index + query.length)}

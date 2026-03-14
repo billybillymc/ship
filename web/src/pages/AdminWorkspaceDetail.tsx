@@ -209,7 +209,7 @@ export function AdminWorkspaceDetailPage() {
         <div className="text-red-500">{error || 'Workspace not found'}</div>
         <button
           onClick={() => navigate('/admin')}
-          className="text-accent hover:underline"
+          className="text-accent-foreground hover:underline"
         >
           Back to Admin Dashboard
         </button>
@@ -330,7 +330,7 @@ export function AdminWorkspaceDetailPage() {
                             "text-sm transition-colors",
                             copiedId === invite.id
                               ? "text-green-500"
-                              : "text-accent hover:text-accent/80"
+                              : "text-accent-foreground hover:text-accent-foreground/80"
                           )}
                         >
                           {copiedId === invite.id ? 'Copied!' : 'Copy Link'}

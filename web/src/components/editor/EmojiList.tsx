@@ -65,7 +65,7 @@ export const EmojiList = forwardRef<EmojiListRef, EmojiListProps>(
       return (
         <>
           {shortcode.slice(0, index)}
-          <span className="bg-accent/30 text-accent-foreground">
+          <span className="bg-accent/30 text-accent-foreground-foreground">
             {shortcode.slice(index, index + query.length)}
           </span>
           {shortcode.slice(index + query.length)}
