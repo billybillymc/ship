@@ -27,7 +27,7 @@ MVP delivers: one proactive detection end-to-end, one HITL gate, on-demand chat,
 
 ### Step 1: Project Scaffolding
 
-**Goal:** Set up the agent as a new package in the monorepo with LangGraph, Gemini, and LangSmith wired.
+**Goal:** Set up the agent as a standalone service in the monorepo. The agent is a **separate process** that calls Ship's REST API over HTTP — it does not share the API's process, database connection, or express routes. It runs its own HTTP server for the on-demand chat and suggestion endpoints.
 
 **Files to create:**
 ```
@@ -35,7 +35,8 @@ agent/
 ├── package.json
 ├── tsconfig.json
 ├── src/
-│   ├── index.ts                  # Entry point — starts worker + registers API routes
+│   ├── index.ts                  # Entry point — starts HTTP server + event listener
+│   ├── server.ts                 # Express server for agent-specific routes (on-demand, suggestions)
 │   ├── graph/
 │   │   ├── state.ts              # FleetGraphState interface
 │   │   ├── graph.ts              # LangGraph graph definition (nodes, edges, conditional routing)
@@ -66,8 +67,8 @@ agent/
 
 **Files to modify:**
 - `package.json` (root) — add `agent` to pnpm workspaces
-- `api/src/index.ts` — mount agent API routes under `/api/agent/`
-- `api/src/db/schema.sql` — reference only (don't modify, use migration)
+
+**Architecture note:** The agent runs as its own process on a separate port (e.g., :3001). The frontend calls agent endpoints directly (or via a reverse proxy). The agent calls Ship's REST API at its configured base URL. The agent has its own database connection for the `agent_actions` table only — all Ship data is fetched via HTTP.
 
 **Dependencies (agent/package.json):**
 ```json
@@ -148,9 +149,10 @@ Build the LangGraph `StateGraph`:
    - `userContext` → `[projectFetch, personFetch]` (parallel via LangGraph fan-out)
    - `[projectFetch, personFetch]` → `thresholdEvaluator` (fan-in)
    - `thresholdEvaluator` → `geminiReasoner`
-   - `geminiReasoner` → conditional edge:
+   - `geminiReasoner` → conditional edge (Gemini Reasoner **always runs** on both paths — the conditional determines what happens **after** it):
      - If violations exist → `suggestionGenerator` → `notificationSender`
-     - If clean → `notificationSender` (summary only)
+     - If clean → `notificationSender` (summary only, Suggestion Generator skipped)
+     - If on-demand → stream response directly (Threshold Evaluator and Suggestion Generator both skipped)
 3. Compile the graph
 
 **Acceptance criteria:**
@@ -276,6 +278,33 @@ LangGraph node that:
 
 ---
 
+### Step 6b: Error & Fallback Nodes
+
+**Goal:** Handle Ship API failures, missing data, and Gemini errors gracefully — the spec explicitly requires error and fallback nodes.
+
+**File: `agent/src/graph/nodes/error-handler.ts`**
+
+LangGraph error handler node that:
+1. Catches errors from any fetch node (Ship API down, 404 for missing project/person, timeout)
+2. Writes error details to `state.errors`
+3. Routes to fallback behavior:
+   - **Fetch node failure:** Skip that data source, continue with available data. E.g., if Person Fetch fails but Project Fetch succeeded, run Threshold Evaluator with project data only.
+   - **Gemini failure:** Fall back to structured templated alerts from Threshold Evaluator violations. No natural language, but violations still surface.
+   - **All fetches fail (Ship API down):** Terminate the run, log failure, wait for next trigger. No partial suggestions written.
+
+**Implementation in graph.ts:**
+- Wrap each fetch node with LangGraph error handling (try/catch within the node, write to `state.errors`)
+- Add a conditional edge after fetch fan-in: if all fetches failed → terminate early. If partial failure → continue with available data.
+- After Gemini Reasoner: if Gemini errored → route to a `fallback-notifier` node that generates templated messages from violations.
+
+**Acceptance criteria:**
+- Ship API returning 500 for project fetch → graph continues with person data only, LangSmith trace shows the error
+- Gemini API timeout → structured violation alerts still appear in action queue
+- All fetches fail → graph terminates cleanly, no suggestions written, error logged
+- No uncaught exceptions crash the agent process
+
+---
+
 ### Step 7: Suggestion Generator & Action Queue Writer
 
 **Goal:** When violations are detected and Gemini recommends actions, write them as pending suggestions to the `agent_actions` table.
@@ -283,9 +312,10 @@ LangGraph node that:
 **File: `agent/src/graph/nodes/suggestion-generator.ts`**
 
 LangGraph node that:
-1. Reads `gemini_output` from state
-2. Parses recommended actions from Gemini's response (priority changes, status changes)
-3. For each action, creates a `PendingSuggestion` with:
+1. Reads `violations` from state (not Gemini output — suggestions are derived deterministically from violations, not parsed from free text)
+2. Maps each violation to a concrete action: `priority_overload` → suggest demoting the lowest-severity high-priority issue; `person_overload` → suggest reassigning one issue to the least-loaded team member; `stale_issue` → suggest status change or update reminder
+3. Attaches `gemini_reasoning` from the Gemini Reasoner output as the human-readable explanation
+4. For each action, creates a `PendingSuggestion` with:
    - `action_type` (e.g., `priority_change`)
    - `target_user_id` (the assignee of the affected issue)
    - `context` (violation details, threshold values)
@@ -344,12 +374,12 @@ PATCH /api/agent/suggestions/:id              → approve, dismiss, or snooze a 
 
 ### Step 9: Event Listener (Proactive Trigger)
 
-**Goal:** Wire the proactive mode — when an issue changes in Ship, the agent evaluates it.
+**Goal:** Wire the proactive mode — when an issue changes in Ship, the agent evaluates it. This is the implementation of MVP Use Case 3 (Engineer Nudge): when a threshold fires for an engineer-role user (staleness or person overload), the suggestion targets that engineer.
 
 **File: `agent/src/worker/event-listener.ts`**
 
-1. Connect to Ship's WebSocket at `/events` using the service account token
-2. Listen for `document:updated` events where `document_type = 'issue'`
+1. Connect to Ship's existing `/events` WebSocket endpoint (already exists in `api/src/collaboration/index.ts` — supports `broadcastToUser` with JSON messages). Authenticate using the service account session.
+2. Listen for document change events (the API already broadcasts events like `accountability:updated`). May need to add new broadcast calls in issue/document mutation routes if `document:updated` events aren't already emitted for all issue changes.
 3. Implement 30-second debounce per project: collect all events for the same project within the window, then fire one graph run
 4. For each debounced batch:
    - Build trigger payload: `{ trigger_type: 'event', document_ids: [...], project_id, assignee_ids: [...] }`
@@ -386,9 +416,9 @@ Response: SSE stream
 Handler:
 1. Build trigger payload: `{ trigger_type: 'on_demand', user_question: question, view_context: context }`
 2. Invoke the LangGraph graph
-3. The graph runs fetch nodes based on `view_context` (e.g., if context is a project, run Project Fetch)
-4. Gemini Reasoner runs in `ON_DEMAND` mode with the user's question
-5. Stream Gemini's response back via SSE
+3. The graph takes a **different path for on-demand**: Trigger Context → User Context → Fetch nodes (based on view context) → Gemini Reasoner in `ON_DEMAND` mode. **Threshold Evaluator and Suggestion Generator are skipped** — on-demand mode answers the user's question, it doesn't generate persistent suggestions. The conditional edge after Trigger Context routes on-demand runs directly from fetch to Gemini Reasoner.
+4. Stream Gemini's response back via SSE
+5. If the user's question implies an action ("change the priority of AUTH-42"), the Gemini Reasoner outputs structured action metadata alongside the response text, which the frontend renders as inline approve/dismiss buttons.
 
 **File: `agent/src/graph/prompts/on-demand.ts`**
 
@@ -458,7 +488,9 @@ web/src/components/agent/
 └── useAgentSuggestions.ts      # Hook: fetches and manages suggestions
 ```
 
-**File to modify:** Add an "Agent" mode to the sidebar/mode switcher, or add a notification badge to the agent icon that shows pending suggestion count.
+**Note:** The chat panel (Step 11) and action queue are **two separate UI surfaces**. The chat panel is a slide-out overlay for on-demand conversations. The action queue is a persistent list of agent suggestions accessible from the agent icon (notification badge shows pending count). When the agent icon is clicked, the user sees the action queue by default; a "Chat" tab or button switches to the chat panel.
+
+**File to modify:** Add notification badge to the agent icon showing pending suggestion count.
 
 **AgentSuggestionCard.tsx:**
 - Shows: what the agent wants to do (bold), why (Gemini reasoning), severity indicator
@@ -483,9 +515,9 @@ web/src/components/agent/
 
 **Goal:** Create seed data that triggers agent detections for demo purposes.
 
-**File to create:** `api/src/db/seed-fleet.ts`
+**File to update:** `api/src/db/seed-fleet.ts` (already exists with Treasury department seed data — needs modifications to ensure FleetGraph threshold triggers are met)
 
-This script creates:
+The existing seed data has many high-priority issues across projects but needs these specific additions:
 1. Program "Platform" with projects: "Auth Revamp" (overloaded), "Dashboard" (healthy), "API Gateway" (stale)
 2. Program "Mobile" with projects: "iOS App" (in-progress overload), "Android App" (healthy)
 3. "Auth Revamp" gets 9 high-priority issues (triggers >7 threshold) — assigned across 3 people
@@ -493,8 +525,9 @@ This script creates:
 5. "API Gateway" has 2 high-priority issues with `updated_at` set to 4 days ago (triggers staleness)
 6. "iOS App" has 6 in-progress issues (triggers >5 threshold)
 7. "Dashboard" has 3 medium-priority issues, all updated recently (clean run)
-8. Person documents for all users with `role` property set
+8. Person documents must have an `agent_role` property set to `'director'` | `'pm'` | `'engineer'` (the existing seed stores job titles as `role`, which is a free-text string — the agent needs a structured enum). Update seed to add `agent_role` to person document properties.
 9. One empty project "Performance Optimization" (for project kickoff use case, post-MVP)
+10. Verify: at least one project must have >7 non-done high-priority issues concentrated (the existing seed spreads high-priority issues across many projects — may need to concentrate them)
 
 **File to modify:** `package.json` — add script `"db:seed-fleet": "ts-node api/src/db/seed-fleet.ts"`
 
@@ -529,17 +562,17 @@ This script creates:
 
 ### Step 15: Deployment
 
-**Goal:** Deploy the agent alongside the Ship API.
+**Goal:** Deploy the agent as a separate process alongside the Ship API.
 
-**Approach:** The agent runs as part of the Ship API process (same EB instance). The event listener and API routes are initialized on server startup.
+**Approach:** The agent runs as its own process on the same EB instance (or a separate one). It has its own HTTP server for agent-specific routes and connects to Ship's API and WebSocket as an external client.
 
 **Files to modify:**
-- `api/src/index.ts` — import and initialize agent on startup
-- `.ebextensions/` or `Procfile` — ensure the agent worker starts
-- Environment variables added to EB configuration
+- `Procfile` or `.ebextensions/` — add agent as a second process: `agent: node agent/dist/index.js`
+- Environment variables added to EB configuration (LANGCHAIN keys, GOOGLE_AI key, AGENT_SERVICE_TOKEN, SHIP_API_URL)
+- Frontend config — agent API base URL (e.g., same host, different port, or proxied path)
 
 **Acceptance criteria:**
-- Agent is running on the deployed instance
+- Agent process is running on the deployed instance, separate from the API process
 - On-demand chat works from the deployed frontend
 - Proactive detection fires when issues are changed on the deployed instance
 - LangSmith traces appear for deployed runs
@@ -569,6 +602,14 @@ Sections to complete for MVP:
 ## Part 2: Final Submission (Due Sunday 11:59 PM)
 
 Everything below builds on the MVP foundation.
+
+**Dependency ordering:**
+- Step 17 (Scheduler) must come first — Steps 18, 19, 21 depend on it
+- Steps 18 (Director) and 19 (Morning Briefing) can be parallelized after Step 17
+- Steps 20 (Coach), 21 (Retro Autopilot), 22 (Load Balancer), 23 (Project Kickoff) are independent of each other
+- Step 24 (Snooze/Dismiss) and Step 25 (Severity Scoring) are independent of use case steps
+- Step 26 (WebSocket Push) is independent
+- Steps 27-30 (test cases, cost analysis, architecture docs, polish) are sequential and come last
 
 ---
 
@@ -840,7 +881,7 @@ Assumptions:
 - Proactive: 1 morning briefing per user per day + ~10 event-driven runs per project per day (most are threshold-only, no Gemini)
 - On-demand: 2 invocations per user per day average
 - Average tokens per Gemini call: ~5k input, ~1k output
-- Gemini pricing: use current Gemini Pro pricing
+- Gemini model: Gemini 2.0 Flash (fast, cheap) for proactive/clean runs; Gemini 2.0 Pro for deep analysis/coaching. Use current pricing from Google AI pricing page at time of submission.
 
 | Scale | Users | Briefings/day | On-demand/day | Gemini calls/day | Est. monthly |
 |-------|-------|--------------|---------------|-----------------|-------------|

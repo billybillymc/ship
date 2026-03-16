@@ -14,7 +14,7 @@
   When person-level and project-level thresholds conflict (e.g., agent wants to demote an issue for person relief, but the project isn't over its threshold), person-level takes precedence for suggestions — the agent suggests the change and explains the person-level justification. The PM can dismiss if the project context overrides.
 * **What is the agent allowed to do without human approval?**
   The agent is allowed to create new requests for the user to: change issue priority or change issue status. The agent is also allowed to draft a retro completion and create a request for user approval. It cannot finalize or 'close' a document without a human signature. It can also decide that it *should* plan a project and create a request for user approval to do so. It can also look at projects that could be worth building.
-  > **Open question:** The agent authenticates as a service account but writes suggestions *for* specific users. Suggestions need a `target_user_id` so the right person sees them — the service account is the author, not the audience.
+  The agent authenticates as a service account but writes suggestions *for* specific users. Every `agent_actions` row has a `target_user_id` — the service account is the author, the target user is the audience.
 * **What must always require confirmation?**
   The agent will always require confirmation to change issue priority or change issue status. It will also require confirmation that it is okay to put together the initial issues for an empty project. The same will be true for projects that it suggests every morning: it will require user permission to create those projects, following a requisite conversation about the project details (impact, complexity, etc).
 * **How does the agent know who is on a project?**
@@ -88,7 +88,8 @@ Role: Director
 * **When does the proactive agent run without a user present?**
   Two schedules:
   - Morning briefing: Once daily, early morning before work starts. Scans everything, generates briefings per user, queues suggested actions.
-  - Event-driven: Whenever a document changes (issue updated, status changed, new issue created). This is where the thresholds get checked. Did this change push a project over 7 high-priority items? Did an issue just go 2 days stale?
+  - Event-driven: Whenever a document changes (issue updated, status changed, new issue created). This is where the thresholds get checked — did this change push a project over 7 high-priority items?
+  - Staleness cron (hourly): Scans for issues that have aged past their update thresholds. The absence of an update never triggers a webhook, so staleness detection requires a scheduled tick.
 * **Poll vs. webhook vs. hybrid - what are the tradeoffs?**
   - Webhook-style (event-driven): You already have WebSocket infrastructure for collaboration. When a document mutation hits the API, fire an internal event that the agent evaluates. No polling overhead, rapid detection. This covers use cases 1-3 and 5 — anything triggered by a change.
   - Poll (scheduled): Morning briefing (use case 4) and retro autopilot (use case 7) are time-based. Additionally, staleness checks ("no update in 2 days") require a scheduled tick — an hourly cron job will scan for issues that have aged past their update thresholds, since the absence of an update will never trigger a webhook.
@@ -107,7 +108,7 @@ Role: Director
 * **What does your choice cost at 100 projects? At 1,000?**
   Event-driven cost scales with write volume, not project count. Each document mutation triggers a lightweight threshold check (a few SQL
   queries against that project's issues). No Gemini call needed for threshold detection — that's just math.
-  > **Open question (debouncing scope):** A single issue reassignment can affect two projects and one person. The debounce window must group by *all* affected entities (projects + persons), not just the changed document's project.
+  Debouncing scope: a single issue reassignment can affect two projects and one person. The debounce window groups by *all* affected entities (projects + persons), not just the changed document's project.
 
   Gemini calls happen only when:
   - Composing the morning briefing (~1 call per user per day)
@@ -237,11 +238,10 @@ Role: Director
   Retry with exponential backoff. After N failed attempts, mark the run as failed and wait for the next scheduled trigger. No partial actions — if the agent fetched some data but can't complete the run or write suggestions, it discards the whole run. Next run starts clean. This is safe because runs are stateless and idempotent. Suggestions already written to the action queue from prior runs are unaffected — they live in Ship's database.
 * **How does it degrade gracefully?**
   1. Full capability. Ship API + Gemini both healthy. Agent reasons, drafts, coaches.
-  2. Ship API up, Gemini unavailable. Agent falls back to structured alerts only — threshold violations rendered as templated messages. Project X has N high-priority issues (threshold: 7)." No coaching, no retro drafts, no project suggestions. Still useful.
+  2. Gemini unavailable, Ship API up. Agent falls back to structured alerts only — threshold violations rendered as templated messages (e.g., "Project X: 9 High Priority Items, threshold: 7"). Skips Coaching and Drafting nodes but maintains Threshold notifications. The system remains functional as a deterministic monitor. Still useful.
   3. Ship API down. Agent can't do anything. Retries with backoff, then waits for next trigger. No silent failures — failed runs are logged so you know the agent was offline.
-  4. Gemini unavailable: If Gemini is unavailable, the agent still pushes Structured Data Alerts to the action queue (e.g., 'Project X: 9 High Priority Items'). It skips 'Coaching' and 'Drafting' nodes but maintains the 'Threshold' notifications so the system remains functional as a deterministic monitor.
 * **What gets cached and for how long?**
-  Persisted state (not cached — this is durable, written to the `agent_state` database table):
+  Persisted state (not cached — this is durable, written to the `agent_actions` database table):
   - Dismissed/snoozed suggestions. When a user refuses or snoozes a suggestion, that decision is persisted so the agent doesn't re-raise the same condition. Dismissals persist until the underlying condition changes (e.g., high-priority count goes from 9 to 12 — new violation, new suggestion). Snoozes persist for the duration the user chose (24h, 1 week, etc.) then expire and the agent re-evaluates.
   - Last-run violation snapshots. Stored per project/user so the agent can diff against the current state and only surface new or changed violations. Without this, every morning briefing would repeat everything from yesterday.
   - No fetch data caching. Every run hits Ship's API fresh. The data changes too frequently and the queries are scoped enough that caching would add complexity for no benefit.
@@ -249,7 +249,8 @@ Role: Director
 
   The short version: the agent persists its own decisions and what users said about them, not Ship's data.
 
-  - All thresholds (>7 high priority, >2 days stale, etc.) are default starting points, but can be updated in the settings section.
+  All thresholds (>7 high priority, >2 days stale, etc.) are default starting points, but can be updated in the settings section.
+
 ## Phase 3: Stack and Deployment
 
 ### 8. Deployment Model
@@ -278,10 +279,10 @@ Role: Director
 
   The only scenario where latency matters is: a change happens, the worker evaluates it, and the user is online to see the notification. That's WebSocket end-to-end. Well under 5 minutes.
 * **What is your token budget per invocation?**
-  Most invocations use zero Gemini tokens. Threshold checks are math against API data. No Gemini call involved.
-
-  When Gemini does get called:
-  - Morning briefing: ~2-3k input tokens (violations summary + context), ~500-1k output tokens. One per user per day.
+  Every invocation calls Gemini (the Gemini Reasoner always runs — clean runs get a health summary, problem runs get deep analysis). Token usage per invocation type:
+  - Clean run (no violations): ~1-2k input (project snapshot), ~200-500 output (short summary). Cheapest path.
+  - Violation run: ~2-3k input (violations + project data), ~500-1k output (structured analysis). One per triggered project.
+  - Morning briefing: ~2-3k input (aggregated violations + context), ~500-1k output. One per user per day.
   - Retro draft: ~3-5k input (completed issues, carryover, velocity data), ~1-2k output. One per retro.
   - Coach insight: ~3-5k input (person's history, patterns, suggestion history), ~500-1k output. On-demand only.
   - Project kickoff: ~2-3k input, ~2-3k output (issue breakdown). Rare — only when conditions are met and user approves.
@@ -348,6 +349,8 @@ Existing endpoints the agent calls:
 - `GET /api/issues?project_id=X` — Project Fetch
 - `GET /api/issues?assignee_id=X` — Person Fetch
 - `GET /api/projects?program_id=X` — Program Fetch
+- `GET /api/documents?program_id=X&document_type=project` — Program Fetch (all projects in a program)
+- `GET /api/documents?document_type=person` — fetch person documents for user roles
 - `GET /api/weeks/:id/iterations` — Retro Fetch
 - `PATCH /api/issues/:id` — for approved mutations (priority, status, assignee changes)
 
@@ -375,7 +378,7 @@ Smaller, focused prompts produce better output than one prompt trying to do ever
 ### 14. Chat UI Design
 
 The on-demand chat is a slide-out panel from the right edge, overlaying the properties sidebar:
-- Invoked by an agent icon in the icon rail (leftmost 48px panel) + keyboard shortcut (Cmd+K or similar)
+- Invoked by an agent icon in the icon rail (leftmost 48px panel) + keyboard shortcut (Cmd+Shift+A or similar)
 - The panel header shows what context is active: "Chatting about: AUTH-42" or "Chatting about: Project Login Revamp"
 - Responses stream in real-time via SSE from the `POST /api/agent/on-demand` endpoint
 - The Gemini Reasoner node streams output token-by-token back through the SSE connection; the frontend renders incrementally
