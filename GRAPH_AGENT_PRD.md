@@ -25,6 +25,49 @@ MVP delivers: one proactive detection end-to-end, one HITL gate, on-demand chat,
 
 ---
 
+### Step 0: Service Account Auth for Ship API + WebSocket
+
+**Goal:** Ship currently uses session cookies with 15-minute timeout. The agent is a separate process that needs to authenticate without a browser. Add bearer token auth to Ship so the agent can call the REST API and connect to the `/events` WebSocket.
+
+**File to create:** `api/src/middleware/service-token-auth.ts`
+
+```typescript
+// Middleware that checks for Authorization: Bearer <token> header.
+// If present and valid, attaches the service account user to req.
+// Falls through to existing session auth if no bearer token is present.
+// This does NOT replace session auth — it adds a parallel path.
+```
+
+Implementation:
+1. Check for `Authorization: Bearer <token>` header
+2. Compare token against `AGENT_SERVICE_TOKEN` environment variable
+3. If match, look up the service account user (a real user row with a known email like `agent@ship.internal`)
+4. Attach to `req.user` and call `next()` — downstream routes see a normal authenticated user
+5. If no bearer header, fall through to existing session cookie auth (no change to current behavior)
+
+**File to modify:** `api/src/index.ts` — add the middleware before route handlers (but after session middleware, so it's checked first)
+
+**File to modify:** `api/src/collaboration/index.ts` — accept token auth on WebSocket upgrade:
+- On `/events` connection, check for `token` query parameter: `ws://host/events?token=xxx`
+- If valid, associate the connection with the service account user
+- If no token, fall through to existing cookie-based auth
+
+**File to modify:** `api/src/db/seed-fleet.ts` — create the service account user:
+```sql
+INSERT INTO users (email, name) VALUES ('agent@ship.internal', 'Ship Agent');
+INSERT INTO workspace_memberships (user_id, workspace_id, role) VALUES (..., ..., 'member');
+```
+
+**Environment variable:** `AGENT_SERVICE_TOKEN` — a long random string, set on both the Ship API and the agent process.
+
+**Acceptance criteria:**
+- `curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/issues` returns issues (not 401)
+- Normal browser session auth still works (no regression)
+- WebSocket connection with `?token=xxx` receives events
+- Service account user exists and is a workspace member
+
+---
+
 ### Step 1: Project Scaffolding
 
 **Goal:** Set up the agent as a standalone service in the monorepo. The agent is a **separate process** that calls Ship's REST API over HTTP — it does not share the API's process, database connection, or express routes. It runs its own HTTP server for the on-demand chat and suggestion endpoints.

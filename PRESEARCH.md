@@ -263,7 +263,7 @@ Role: Director
 
   No orchestration framework needed. It's one process with a timer and a WebSocket listener.
 * **How does it authenticate with Ship without a user session?**
-  A service account — a regular user in the system with a long-lived API token (not a 15-minute session cookie). The agent authenticates as this account on every API call. Benefits:
+  A service account — a regular user in the system (`agent@ship.internal`) with a long-lived bearer token (not a 15-minute session cookie). Ship's API needs a new bearer token auth middleware (checks `Authorization: Bearer <token>` header, falls through to session auth if absent). The `/events` WebSocket accepts the token as a query param (`?token=xxx`). This is a prerequisite (PRD Step 0) before the agent can function. Benefits:
 
   - Every suggestion the agent writes is attributed to a known user ("Ship Agent"), so there's an audit trail
   - The service account is a workspace member, so it has the same data access as any user — no special permissions layer
