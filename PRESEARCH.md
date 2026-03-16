@@ -106,8 +106,7 @@ Role: Director
   The real staleness question is: how long between "agent detects condition" and "user sees it"? If the user is online, instant via WebSocket. If offline, they see it next time they open Ship. That's acceptable — this isn't an incident response system.
 
 * **What does your choice cost at 100 projects? At 1,000?**
-  Event-driven cost scales with write volume, not project count. Each document mutation triggers a lightweight threshold check (a few SQL
-  queries against that project's issues). No Gemini call needed for threshold detection — that's just math.
+  Event-driven cost scales with write volume, not project count. Each document mutation triggers a lightweight threshold check (deterministic math against fetched data) followed by a Gemini Reasoner call (cheap health summary on clean runs, deeper analysis on violation runs).
   Debouncing scope: a single issue reassignment can affect two projects and one person. The debounce window groups by *all* affected entities (projects + persons), not just the changed document's project.
 
   Gemini calls happen only when:
