@@ -17,7 +17,7 @@ interface SearchableDocument {
   };
 }
 
-type ConvertibleDocumentType = 'wiki' | 'issue' | 'project' | 'sprint';
+import type { ConvertibleDocumentType } from '@ship/shared';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -345,15 +345,9 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
               </Command.Group>
             )}
 
-            {/* Convert Actions (only show when viewing a convertible document) */}
-            {currentDocument && onConvertDocument && ['wiki', 'issue', 'project', 'sprint'].includes(currentDocument.type) && (
+            {/* Convert Actions (only show when viewing an issue or project) */}
+            {currentDocument && onConvertDocument && ['issue', 'project'].includes(currentDocument.type) && (
               <Command.Group heading="Convert" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted">
-                {currentDocument.type !== 'wiki' && (
-                  <CommandItem onSelect={() => runCommand(() => onConvertDocument('wiki'))}>
-                    <ConvertIcon />
-                    <span>Convert to Wiki</span>
-                  </CommandItem>
-                )}
                 {currentDocument.type !== 'issue' && (
                   <CommandItem onSelect={() => runCommand(() => onConvertDocument('issue'))}>
                     <ConvertIcon />
@@ -364,12 +358,6 @@ export function CommandPalette({ open, onOpenChange, currentDocument, onConvertD
                   <CommandItem onSelect={() => runCommand(() => onConvertDocument('project'))}>
                     <ConvertIcon />
                     <span>Convert to Project</span>
-                  </CommandItem>
-                )}
-                {currentDocument.type !== 'sprint' && (
-                  <CommandItem onSelect={() => runCommand(() => onConvertDocument('sprint'))}>
-                    <ConvertIcon />
-                    <span>Convert to Week</span>
                   </CommandItem>
                 )}
               </Command.Group>

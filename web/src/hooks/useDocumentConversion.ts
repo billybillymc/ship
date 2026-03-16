@@ -5,8 +5,7 @@ import { apiPost } from '@/lib/api';
 import { issueKeys } from '@/hooks/useIssuesQuery';
 import { projectKeys } from '@/hooks/useProjectsQuery';
 import { useToast } from '@/components/ui/Toast';
-
-export type DocumentType = 'issue' | 'project';
+import type { ConvertibleDocumentType } from '@ship/shared';
 
 interface UseDocumentConversionOptions {
   /** Navigate to the converted document after conversion */
@@ -19,7 +18,7 @@ interface UseDocumentConversionOptions {
 
 interface ConversionResult {
   id: string;
-  document_type: string;
+  document_type: ConvertibleDocumentType;
   title: string;
 }
 
@@ -32,7 +31,7 @@ export function useDocumentConversion(options: UseDocumentConversionOptions = {}
 
   const convert = useCallback(async (
     documentId: string,
-    sourceType: DocumentType,
+    sourceType: ConvertibleDocumentType,
     documentTitle: string
   ): Promise<ConversionResult | null> => {
     setIsConverting(true);
@@ -79,7 +78,7 @@ export function useDocumentConversion(options: UseDocumentConversionOptions = {}
 
   const undoConversion = useCallback(async (
     documentId: string,
-    documentType: DocumentType
+    documentType: ConvertibleDocumentType
   ): Promise<ConversionResult | null> => {
     setIsConverting(true);
 

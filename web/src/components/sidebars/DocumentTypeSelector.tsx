@@ -1,22 +1,19 @@
 import { cn } from '@/lib/cn';
-
-export type DocumentType = 'wiki' | 'issue' | 'project' | 'sprint';
+import type { ConvertibleDocumentType } from '@ship/shared';
 
 interface DocumentTypeSelectorProps {
-  value: DocumentType;
-  onChange: (type: DocumentType) => void;
+  value: ConvertibleDocumentType;
+  onChange: (type: ConvertibleDocumentType) => void;
   disabled?: boolean;
   /**
    * Document types that should be disabled (e.g., when conversion is restricted)
    */
-  disabledTypes?: DocumentType[];
+  disabledTypes?: ConvertibleDocumentType[];
 }
 
-const TYPE_OPTIONS: { value: DocumentType; label: string; icon: React.ReactNode }[] = [
-  { value: 'wiki', label: 'Wiki', icon: <WikiIcon /> },
+const TYPE_OPTIONS: { value: ConvertibleDocumentType; label: string; icon: React.ReactNode }[] = [
   { value: 'issue', label: 'Issue', icon: <IssueIcon /> },
   { value: 'project', label: 'Project', icon: <ProjectIcon /> },
-  { value: 'sprint', label: 'Week', icon: <SprintIcon /> },
 ];
 
 export function DocumentTypeSelector({
@@ -30,7 +27,7 @@ export function DocumentTypeSelector({
       <label className="block text-xs font-medium text-muted">Type</label>
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value as DocumentType)}
+        onChange={(e) => onChange(e.target.value as ConvertibleDocumentType)}
         disabled={disabled}
         aria-label="Document type"
         className={cn(
@@ -56,15 +53,12 @@ export function DocumentTypeSelector({
 /**
  * Get fields that are required for a specific document type
  */
-export function getRequiredFieldsForType(type: DocumentType): string[] {
+export function getRequiredFieldsForType(type: ConvertibleDocumentType): string[] {
   switch (type) {
     case 'issue':
       return ['state', 'priority'];
     case 'project':
       return ['impact', 'confidence', 'ease'];
-    case 'sprint':
-      return ['start_date', 'end_date', 'status'];
-    case 'wiki':
     default:
       return [];
   }
@@ -74,7 +68,7 @@ export function getRequiredFieldsForType(type: DocumentType): string[] {
  * Check which required fields are missing for a document type
  */
 export function getMissingRequiredFields(
-  type: DocumentType,
+  type: ConvertibleDocumentType,
   properties: Record<string, unknown>
 ): string[] {
   const required = getRequiredFieldsForType(type);
@@ -85,14 +79,6 @@ export function getMissingRequiredFields(
 }
 
 // Icons
-function WikiIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  );
-}
-
 function IssueIcon() {
   return (
     <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,14 +91,6 @@ function ProjectIcon() {
   return (
     <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-    </svg>
-  );
-}
-
-function SprintIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
     </svg>
   );
 }

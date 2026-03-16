@@ -43,6 +43,9 @@ export type DocumentType =
   | 'standup'
   | 'weekly_review';
 
+// Subset of document types that support type conversion (issue <-> project)
+export type ConvertibleDocumentType = Extract<DocumentType, 'issue' | 'project'>;
+
 // Issue states
 export type IssueState = 'triage' | 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
 

@@ -3,7 +3,7 @@ import { pool } from '../db/client.js';
 import { z } from 'zod';
 import { getVisibilityContext, VISIBILITY_FILTER_SQL } from '../middleware/visibility.js';
 import { authMiddleware } from '../middleware/auth.js';
-import type { SprintRow, StandupRow, IssueStateRow, SqlParam, TipTapDoc } from '../types/database.js';
+import type { SprintRow, StandupRow, IssueStateRow, IssuePropertiesRow, SqlParam, TipTapDoc } from '../types/database.js';
 import {
   transformIssueLinks,
   extractTicketNumbersFromContents,
@@ -2020,7 +2020,7 @@ const sprintReviewSchema = z.object({
 });
 
 // Helper to generate pre-filled sprint review content
-async function generatePrefilledReviewContent(sprintData: { sprint_number: number; program_name: string | undefined; plan: string | null }, issues: IssueStateRow[]) {
+async function generatePrefilledReviewContent(sprintData: { sprint_number: number; program_name: string | undefined; plan: string | null }, issues: IssuePropertiesRow[]) {
   // Categorize issues
   const issuesPlanned = issues.filter(i => {
     const props = i.properties || {};

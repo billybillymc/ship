@@ -111,13 +111,21 @@ export interface StandupRow {
 /** Issue state values used in filter callbacks */
 export type IssueState = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
 
-/** Row with issue state from a query (used in filter callbacks) */
+/** Row with top-level state extracted via SQL (e.g. properties->>'state' as state) */
 export interface IssueStateRow {
   id?: string;
   title?: string;
   ticket_number?: number;
   state: IssueState | string;
   properties?: Record<string, unknown>;
+}
+
+/** Raw issue row with state nested in properties (no SQL extraction) */
+export interface IssuePropertiesRow {
+  id?: string;
+  title?: string;
+  ticket_number?: number;
+  properties: Record<string, unknown>;
 }
 
 /** TipTap document node structure */

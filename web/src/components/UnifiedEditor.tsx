@@ -13,12 +13,11 @@ import type {
   ProgramPanelProps,
 } from '@/components/sidebars/PropertiesPanel';
 import { DocumentTypeSelector, getMissingRequiredFields } from '@/components/sidebars/DocumentTypeSelector';
-import type { DocumentType as SelectableDocumentType } from '@/components/sidebars/DocumentTypeSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { PlanQualityBanner, RetroQualityBanner } from '@/components/PlanQualityBanner';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import type { Person } from '@/components/PersonCombobox';
-import type { BelongsTo } from '@ship/shared';
+import type { BelongsTo, ConvertibleDocumentType } from '@ship/shared';
 
 export type DocumentType = 'wiki' | 'issue' | 'project' | 'sprint' | 'program' | 'person' | 'weekly_plan' | 'weekly_retro';
 
@@ -206,8 +205,8 @@ export function UnifiedEditor({
 
   // Track missing required fields after type changes
   const missingFields = useMemo(() => {
-    const selectableType = document.document_type as SelectableDocumentType;
-    if (['wiki', 'issue', 'project', 'sprint'].includes(selectableType)) {
+    const docType = document.document_type;
+    if (docType === 'issue' || docType === 'project') {
       // Build properties object from document
       const props: Record<string, unknown> = {
         ...document.properties,
@@ -217,11 +216,8 @@ export function UnifiedEditor({
         impact: (document as ProjectDocument).impact,
         confidence: (document as ProjectDocument).confidence,
         ease: (document as ProjectDocument).ease,
-        start_date: (document as SprintDocument).start_date,
-        end_date: (document as SprintDocument).end_date,
-        status: (document as SprintDocument).status,
       };
-      return getMissingRequiredFields(selectableType, props);
+      return getMissingRequiredFields(docType, props);
     }
     return [];
   }, [document]);
@@ -234,15 +230,15 @@ export function UnifiedEditor({
   });
 
   // Handle document type change
-  const handleTypeChange = useCallback(async (newType: SelectableDocumentType) => {
+  const handleTypeChange = useCallback(async (newType: ConvertibleDocumentType) => {
     if (newType === document.document_type) return;
 
     setIsChangingType(true);
     try {
       if (onTypeChange) {
-        await onTypeChange(newType as DocumentType);
+        await onTypeChange(newType);
       } else {
-        await onUpdate({ document_type: newType as DocumentType } as Partial<UnifiedDocument>);
+        await onUpdate({ document_type: newType } as Partial<UnifiedDocument>);
       }
     } finally {
       setIsChangingType(false);
@@ -285,7 +281,7 @@ export function UnifiedEditor({
   );
 
   // Check if this document type can have its type changed
-  const canChangeType = ['wiki', 'issue', 'project', 'sprint'].includes(document.document_type);
+  const canChangeType = ['issue', 'project'].includes(document.document_type);
 
   // Build panel-specific props from sidebarData
   const panelProps = useMemo(() => {
@@ -378,7 +374,7 @@ export function UnifiedEditor({
         {/* Type Selector */}
         <div className="p-4 border-b border-border">
           <DocumentTypeSelector
-            value={document.document_type as SelectableDocumentType}
+            value={document.document_type as ConvertibleDocumentType}
             onChange={handleTypeChange}
             disabled={isChangingType}
           />
