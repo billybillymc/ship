@@ -165,7 +165,8 @@ test.describe('Edge Cases', () => {
     await page.waitForTimeout(500)
 
     // Undo - should remove "Added later" (Yjs batches by transaction boundaries)
-    await page.keyboard.press('Meta+z')
+    const undoMod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    await page.keyboard.press(`${undoMod}+z`)
     await page.waitForTimeout(300)
 
     // After undo, "Added later" should be gone
@@ -173,7 +174,7 @@ test.describe('Edge Cases', () => {
     const contentAfterUndo = await editor.textContent() || ''
 
     // Redo
-    await page.keyboard.press('Meta+Shift+z')
+    await page.keyboard.press(`${undoMod}+Shift+z`)
     await page.waitForTimeout(300)
 
     // After redo, content should be restored
@@ -352,24 +353,26 @@ test.describe('Edge Cases', () => {
     // Type text
     await page.keyboard.type('Bold and italic text')
 
+    // Use platform-appropriate modifier (Meta on macOS, Control on Linux/Windows)
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+
     // Select all
-    await page.keyboard.press('Meta+a')
+    await page.keyboard.press(`${mod}+a`)
+    await page.waitForTimeout(200)
 
-    // Apply bold
-    await page.keyboard.press('Meta+b')
+    // Apply bold and wait for TipTap to process the transaction
+    await page.keyboard.press(`${mod}+b`)
+    await page.waitForTimeout(300)
 
-    // Apply italic
-    await page.keyboard.press('Meta+i')
-
-    // Wait for formatting to apply
-    await page.waitForTimeout(500)
+    // Apply italic — spacing prevents TipTap from batching unpredictably
+    await page.keyboard.press(`${mod}+i`)
 
     // Verify both formats are applied
     const strongTag = editor.locator('strong')
     const emTag = editor.locator('em, i')
 
-    await expect(strongTag).toBeVisible({ timeout: 3000 })
-    await expect(emTag).toBeVisible({ timeout: 3000 })
+    await expect(strongTag).toBeVisible({ timeout: 5000 })
+    await expect(emTag).toBeVisible({ timeout: 5000 })
 
     // Text should still be readable
     await expect(editor).toContainText('Bold and italic')

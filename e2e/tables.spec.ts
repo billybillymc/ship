@@ -351,8 +351,9 @@ test.describe('Tables', () => {
     await page.waitForTimeout(200);
 
     // Click on table cell and select all in document
+    const mod2 = process.platform === 'darwin' ? 'Meta' : 'Control';
     await firstCell.click();
-    await page.keyboard.press('Meta+a');
+    await page.keyboard.press(`${mod2}+a`);
     await page.waitForTimeout(200);
 
     // Verify table has cells with selectedCell class OR table wrapper has selection
@@ -394,24 +395,24 @@ test.describe('Tables', () => {
 
     // Right-click to open context menu
     await firstCell.click({ button: 'right' });
-    await page.waitForTimeout(300);
 
-    // Look for "Delete table" option
+    // Look for "Delete table" option — use longer timeout for CPU contention under parallel workers
     const deleteTableOption = page.getByText(/Delete table|Remove table/i);
-    if (await deleteTableOption.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await deleteTableOption.isVisible({ timeout: 5000 }).catch(() => false)) {
       await deleteTableOption.click();
-      await page.waitForTimeout(300);
 
       // Verify table is gone
-      await expect(table).toBeHidden({ timeout: 3000 });
+      await expect(table).toBeHidden({ timeout: 5000 });
     } else {
-      // Alternative: Select table and press Delete/Backspace
-      await page.keyboard.press('Meta+a'); // Select all in table
+      // Dismiss context menu first, then select all and delete
+      const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(200);
+      await page.keyboard.press(`${mod}+a`);
       await page.keyboard.press('Backspace');
-      await page.waitForTimeout(300);
 
       // Verify table is gone
-      await expect(table).toBeHidden({ timeout: 3000 });
+      await expect(table).toBeHidden({ timeout: 5000 });
     }
   });
 

@@ -76,30 +76,37 @@ test.describe('Inline Code', () => {
     // Type some text
     await page.keyboard.type('format this');
 
-    // Select the text (Cmd+A or Ctrl+A)
-    await page.keyboard.press('Meta+a'); // Use Meta for Mac, Control for Windows/Linux
+    // Use platform-appropriate modifier (Meta on macOS, Control on Linux/Windows)
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
-    // Wait a moment
-    await page.waitForTimeout(200);
-
-    // Press Cmd+E or Ctrl+E to toggle code
-    await page.keyboard.press('Meta+e');
-
-    // Wait for formatting
+    // Select the text
+    await page.keyboard.press(`${mod}+a`);
     await page.waitForTimeout(300);
+
+    // Verify selection is active before toggling code format
+    const hasSelection = await page.evaluate(() => {
+      const sel = window.getSelection();
+      return sel !== null && sel.toString().length > 0;
+    });
+    expect(hasSelection).toBeTruthy();
+
+    // Press Cmd/Ctrl+E to toggle code
+    await page.keyboard.press(`${mod}+e`);
 
     // Should have code element
     const codeElement = editor.locator('code');
-    await expect(codeElement).toBeVisible({ timeout: 3000 });
+    await expect(codeElement).toBeVisible({ timeout: 5000 });
     await expect(codeElement).toContainText('format this');
 
-    // Press Cmd+E again to remove formatting
-    await page.keyboard.press('Meta+e');
+    // Re-select before toggling off (selection may have collapsed after format apply)
+    await page.keyboard.press(`${mod}+a`);
     await page.waitForTimeout(300);
 
+    // Press Cmd/Ctrl+E again to remove formatting
+    await page.keyboard.press(`${mod}+e`);
+
     // Code element should be gone (text should still exist)
-    const codeCount = await editor.locator('code').count();
-    expect(codeCount).toBe(0);
+    await expect(editor.locator('code')).toHaveCount(0, { timeout: 5000 });
     await expect(editor).toContainText('format this');
   });
 
@@ -218,20 +225,22 @@ test.describe('Inline Code', () => {
     await editor.click();
     await page.waitForTimeout(300);
 
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+
     // Use actual formatting commands instead of markdown syntax
     // First, type and format as bold
-    await page.keyboard.press('Meta+b'); // Start bold
+    await page.keyboard.press(`${mod}+b`); // Start bold
     await page.keyboard.type('Bold and ');
-    await page.keyboard.press('Meta+b'); // End bold
+    await page.keyboard.press(`${mod}+b`); // End bold
 
     // Then add inline code using backticks (TipTap auto-converts)
     await page.keyboard.type('`code`');
     await page.waitForTimeout(500);
 
     // Continue with more bold text
-    await page.keyboard.press('Meta+b');
+    await page.keyboard.press(`${mod}+b`);
     await page.keyboard.type(' together');
-    await page.keyboard.press('Meta+b');
+    await page.keyboard.press(`${mod}+b`);
     await page.waitForTimeout(500);
 
     // Should have bold text

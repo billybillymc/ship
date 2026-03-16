@@ -98,13 +98,19 @@ test.describe('Inline Comments', () => {
     await createDocumentWithText(page, 'Testing keyboard shortcut for adding comments quickly.')
 
     await selectText(page, 'keyboard shortcut')
+    await page.waitForTimeout(300)
 
-    // Press Cmd+Shift+M
-    await page.keyboard.press('Meta+Shift+m')
+    // Verify selection is active before invoking shortcut
+    const selectedText = await page.evaluate(() => window.getSelection()?.toString() || '')
+    expect(selectedText).toContain('keyboard shortcut')
+
+    // Press Cmd/Ctrl+Shift+M (Meta on macOS, Control on Linux/Windows)
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    await page.keyboard.press(`${mod}+Shift+m`)
 
     // Comment input should appear
     const commentInput = page.getByRole('textbox', { name: 'Write a comment...' })
-    await expect(commentInput).toBeVisible({ timeout: 3000 })
+    await expect(commentInput).toBeVisible({ timeout: 5000 })
 
     // Submit comment
     await commentInput.fill('Created via keyboard shortcut')

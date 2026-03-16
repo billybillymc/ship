@@ -176,8 +176,11 @@ test.describe('Auto-Save Race Conditions - Throttle Behavior', () => {
     await login(page);
   });
 
-  test.fixme('throttle: saves periodically during long typing session', async ({ page, context }) => {
-    // Track API calls
+  test('throttle: saves periodically during long typing session', async ({ page, context }) => {
+    await createNewDocument(page);
+    await page.waitForLoadState('networkidle');
+
+    // Track API calls (set up route intercept before typing begins)
     const apiCalls: { timestamp: number; title: string }[] = [];
     await context.route('**/api/documents/**', async (route) => {
       const request = route.request();
@@ -193,8 +196,6 @@ test.describe('Auto-Save Race Conditions - Throttle Behavior', () => {
       }
       await route.continue();
     });
-
-    await createNewDocument(page);
 
     const titleInput = page.locator('textarea[placeholder="Untitled"]');
     await titleInput.click();
@@ -274,10 +275,11 @@ test.describe('Auto-Save Race Conditions - Slow Network', () => {
     await login(page);
   });
 
-  test.fixme('slow response does not overwrite faster local changes', async ({ page, context }) => {
+  test('slow response does not overwrite faster local changes', async ({ page, context }) => {
     await createNewDocument(page);
+    const titleInput = page.locator('textarea[placeholder="Untitled"]');
 
-    // Slow down PATCH responses significantly
+    // Slow down PATCH responses significantly (set up after page navigation)
     await context.route('**/api/documents/**', async (route) => {
       const request = route.request();
       if (request.method() === 'PATCH') {
@@ -286,8 +288,6 @@ test.describe('Auto-Save Race Conditions - Slow Network', () => {
       }
       await route.continue();
     });
-
-    const titleInput = page.locator('textarea[placeholder="Untitled"]');
     await titleInput.click();
 
     // Type "Slow" - this will trigger a save that takes 2s to respond

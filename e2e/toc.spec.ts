@@ -213,31 +213,28 @@ test.describe('Table of Contents (TOC)', () => {
     let tocText = await toc.textContent()
     expect(tocText).toContain('Original Title')
 
-    // Use purely keyboard-based approach to avoid inline comment overlay issues
-    // The cursor is currently in the editor after TOC insertion
-    // First dismiss any tooltips/menus
+    // Dismiss any tooltips/overlays, then use keyboard to navigate to heading
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
 
-    // Go to the very start of the document (above TOC, into heading)
-    await page.keyboard.press('Meta+ArrowUp')
-    await page.waitForTimeout(100)
-    // Select the entire first line (the heading text)
-    await page.keyboard.press('Shift+Meta+ArrowDown')
-    await page.waitForTimeout(100)
-    // Now type replacement - but Shift+Meta+ArrowDown may select too much
-    // Instead, select just to end of current line
-    await page.keyboard.press('Meta+ArrowUp')  // Reset to start
-    await page.waitForTimeout(100)
-    await page.keyboard.press('Meta+Shift+ArrowRight')  // Select to end of line
-    await page.waitForTimeout(100)
-    await page.keyboard.type('New Title')
-    await page.waitForTimeout(1000)
+    // Use platform-appropriate modifier
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
 
-    // TOC should update
-    tocText = await toc.textContent()
-    expect(tocText).toContain('New Title')
-    expect(tocText).not.toContain('Original Title')
+    // Navigate to start of document and select the heading line
+    await page.keyboard.press(`${mod}+Home`)
+    await page.waitForTimeout(200)
+    await page.keyboard.press(`Shift+${mod}+ArrowRight`)
+    await page.waitForTimeout(100)
+    // Select full heading text by extending to end of line
+    await page.keyboard.press('Shift+End')
+    await page.waitForTimeout(100)
+
+    // Type replacement text (replaces selection)
+    await page.keyboard.type('New Title')
+
+    // Wait for TOC to update (debounced via Yjs sync + React re-render)
+    await expect(toc).toContainText('New Title', { timeout: 5000 })
+    await expect(toc).not.toContainText('Original Title')
   })
 
   test('clicking TOC item scrolls to heading', async ({ page }) => {

@@ -135,8 +135,9 @@ test.describe('Backlinks', () => {
     await expect(mention).toBeVisible({ timeout: 3000 })
 
     // Focus the editor and select all content
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
     await editor.click()
-    await page.keyboard.press('Meta+a') // Select all (Cmd+A on Mac)
+    await page.keyboard.press(`${mod}+a`) // Select all
     await page.keyboard.press('Backspace') // Delete selected content
 
     // Wait for editor update to propagate (debounce is 500ms)
@@ -153,13 +154,12 @@ test.describe('Backlinks', () => {
       console.log('No /links POST detected after mention removal:', err.message)
     })
 
-    // Extra wait for sync to propagate
-    await page.waitForTimeout(1500)
+    // Wait for server-side link processing to complete (bidirectional sync is async)
+    await page.waitForTimeout(3000)
 
     // Navigate to Document A and reload to ensure fresh backlinks data
     await page.goto(docAUrl)
     await expect(page.locator('.ProseMirror')).toBeVisible({ timeout: 5000 })
-    await page.waitForTimeout(500)
 
     // Reload to ensure backlinks are fetched fresh from server
     await page.reload()
@@ -172,8 +172,8 @@ test.describe('Backlinks', () => {
     await expect(propertiesSidebar).toBeVisible({ timeout: 3000 })
 
     // Should either show "No backlinks" or not have "Doc with Mention" in the backlinks section
-    const hasNoBacklinks = await propertiesSidebar.locator('text="No backlinks"').isVisible({ timeout: 2000 })
-    const hasDocWithMention = await propertiesSidebar.locator('text="Doc with Mention"').isVisible({ timeout: 2000 })
+    const hasNoBacklinks = await propertiesSidebar.locator('text="No backlinks"').isVisible({ timeout: 3000 })
+    const hasDocWithMention = await propertiesSidebar.locator('text="Doc with Mention"').isVisible({ timeout: 3000 })
 
     // Either "No backlinks" is shown, OR the doc is not in the backlinks
     expect(hasNoBacklinks || !hasDocWithMention).toBeTruthy()

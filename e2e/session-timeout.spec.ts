@@ -502,11 +502,9 @@ test.describe('401 Error Handling', () => {
     expect(currentUrl).toContain('localhost');
   });
 
-  test.fixme('API calls without valid session return 401', async ({ request }) => {
+  test('API calls without valid session return 401', async ({ request }) => {
     // Make an API call without logging in (no session cookie)
-    const response = await request.get('/api/documents', {
-      headers: { Accept: 'application/json' },
-    });
+    const response = await request.get('/api/documents', { headers: { Accept: 'application/json' } });
     expect(response.status()).toBe(401);
   });
 });
@@ -1096,11 +1094,9 @@ test.describe('Session Info API', () => {
     expect(response.data.data).toHaveProperty('absoluteExpiresAt');
   });
 
-  test.fixme('GET /api/auth/session returns 401 when not authenticated', async ({ request }) => {
+  test('GET /api/auth/session returns 401 when not authenticated', async ({ request }) => {
     // Make an API call without logging in (no session cookie)
-    const response = await request.get('/api/auth/session', {
-      headers: { Accept: 'application/json' },
-    });
+    const response = await request.get('/api/auth/session', { headers: { Accept: 'application/json' } });
     expect(response.status()).toBe(401);
   });
 
