@@ -13,7 +13,10 @@ export function createProjectFetch(shipClient: ShipClient) {
       if (state.trigger_type === 'event') {
         projectId = (state.trigger_payload as EventPayload)?.project_id;
       } else if (state.trigger_type === 'on_demand') {
-        const ctx = (state.trigger_payload as OnDemandPayload)?.view_context;
+        // Check current_view_context first (set by triggerContext node),
+        // then fall back to trigger_payload
+        const ctx = state.current_view_context
+          ?? (state.trigger_payload as OnDemandPayload)?.view_context;
         if (ctx?.document_type === 'project') {
           projectId = ctx.document_id;
         }
