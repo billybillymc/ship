@@ -86,6 +86,18 @@ export class ShipClient {
     return Array.isArray(data) ? data : (data.data ?? []);
   }
 
+  async getPrograms(): Promise<Project[]> {
+    const res = await this.fetch('/api/programs');
+    const data = await res.json() as Project[] | { data: Project[] };
+    return Array.isArray(data) ? data : (data.data ?? []);
+  }
+
+  async getAllIssues(): Promise<Issue[]> {
+    const res = await this.fetch('/api/issues');
+    const data = await res.json() as Issue[] | { data: Issue[] };
+    return Array.isArray(data) ? data : (data.data ?? []);
+  }
+
   // ── Action methods (used by action nodes) ─────────────────────────────
 
   async updateIssue(issueId: string, updates: Partial<Issue>): Promise<void> {
