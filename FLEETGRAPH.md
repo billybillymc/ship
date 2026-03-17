@@ -173,15 +173,56 @@ CREATE TABLE agent_actions (
 
 | Test File | Tests | What it covers |
 |-----------|-------|---------------|
-| thresholds.test.ts | 19 | All threshold types: priority overload, in-progress, person overload, staleness, custom configs |
-| suggestion-generator.test.ts | 7 | Violation-to-suggestion mapping for all violation types |
-| event-listener.test.ts | 7 | Debounce timing, multi-project batching, cleanup |
+| thresholds.test.ts | 19 | All threshold types: priority overload, in-progress, person overload, staleness, custom configs, severity scoring |
+| suggestion-generator.test.ts | 7 | Violation-to-suggestion mapping for all 4 violation types, target_user_id fallback |
+| event-listener.test.ts | 7 | Debounce timing, multi-project batching, cleanup, default 30s window |
 | graph-nodes.test.ts | 8 | Individual node behavior: trigger context, user context, threshold evaluator |
 | graph-integration.test.ts | 6 | Full graph execution: clean run, violation run, on-demand, Gemini failure, API failure |
-| ship-client.test.ts | 7 | HTTP client: auth headers, retry logic, response parsing |
-| ship-client-live.test.ts | 3 | Live API: bearer token auth, project filter, token rejection |
-| suggestions-api.test.ts | 5 | Live API: CRUD for agent_actions table |
-| on-demand.test.ts | 3 | SSE streaming: token format, context-aware fetching |
-| server.test.ts | 1 | Health endpoint |
-| migration.test.ts | 6 | Schema validation for agent_actions table |
-| **Total** | **72** | |
+| ship-client.test.ts | 7 | HTTP client: auth headers, 5xx retry with backoff, 4xx no-retry, response parsing |
+| ship-client-live.test.ts | 3 | Live API: bearer token auth, project filter, invalid token rejection |
+| suggestions-api.test.ts | 5 | Live CRUD: create/dismiss/reject invalid/reject unauthed |
+| on-demand.test.ts | 3 | SSE streaming: token format, context-aware project fetching, 400 on missing question |
+| server.test.ts | 1 | Health endpoint response |
+| migration.test.ts | 6 | Schema validation: columns, types, indexes, foreign keys, defaults |
+| scheduler.test.ts | 7 | Morning briefing creation, staleness detection, skip fresh issues, error resilience, interval firing |
+| fetch-nodes.test.ts | 10 | ProgramFetch (parallel projects, partial failure), HistoryFetch (user actions), RetroFetch (completed/carryover split) |
+| gemini-modes.test.ts | 9 | All 8 Gemini modes: PROACTIVE_CLEAN/VIOLATIONS, ON_DEMAND, DIRECTOR_OVERVIEW, COACH, LOAD_BALANCER, PROJECT_KICKOFF, RETRO_DRAFT, fallback |
+| suggestion-lifecycle.test.ts | 7 | Snooze expiry archival, active snooze skip, 7-day pending expiry, duplicate detection, error tolerance |
+| **Total** | **105** | |
+
+## Cost Analysis
+
+### Token Budget per Invocation
+
+| Invocation Type | Input Tokens | Output Tokens | Frequency |
+|----------------|-------------|--------------|-----------|
+| Clean run (no violations) | ~1-2k | ~200-500 | Per event, most common |
+| Violation run | ~2-3k | ~500-1k | Per triggered project |
+| Morning briefing | ~2-3k | ~500-1k | 1 per user per day |
+| Retro draft | ~3-5k | ~1-2k | 1 per retro |
+| Coach insight | ~3-5k | ~500-1k | On-demand only |
+| On-demand chat | ~2-3k | ~500-1k | User-initiated |
+| Load balancer | ~2-3k | ~500-1k | On-demand only |
+| Project kickoff | ~2-3k | ~2-3k | Rare |
+
+### Cost at Scale
+
+| Scale | Users | Gemini Calls/Day | Estimated Cost/Day |
+|-------|-------|-----------------|-------------------|
+| 100 projects | ~20 | ~25 (20 briefings + 5 on-demand) | < $0.10 |
+| 1,000 projects | ~200 | ~250 (200 briefings + 50 on-demand) | < $1.00 |
+| 10,000 projects | ~2,000 | ~2,500 (2,000 briefings + 500 on-demand) | < $10.00 |
+
+**Cost cliffs**: User count (not project count) is the primary driver. Morning briefings scale linearly with users. On-demand costs scale with engagement. Event-driven threshold checks are deterministic math with zero Gemini cost — only violation analysis triggers a Gemini call.
+
+**Mitigation**: Daily cap of 5 coach interactions per user. 30-second debounce per project prevents event storms. Gemini 2.5 Flash pricing makes even 10,000-user scale economical.
+
+## Error Handling & Degradation
+
+| Scenario | Behavior |
+|----------|----------|
+| Gemini unavailable | Falls back to structured templated alerts from threshold violations. No natural language, but violations still surface. |
+| Ship API down | Retry with exponential backoff (3 attempts). On total failure, mark run as failed, wait for next trigger. No partial actions. |
+| Partial fetch failure | Graph continues with available data. If Project Fetch fails but Person Fetch succeeds, threshold evaluator runs with person data only. |
+| Agent process crash | Docker health check restarts it. Suggestions already written to `agent_actions` are unaffected — they live in Ship's database. |
+| WebSocket disconnect | Agent auto-reconnects with 5-second backoff. Events during disconnect are missed but next scheduled run catches up. |
