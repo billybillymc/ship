@@ -1,6 +1,6 @@
 /**
- * Manual test script — triggers graph runs against the live Docker API
- * to verify Gemini reasoning and LangSmith tracing.
+ * Full test suite — triggers all 8 use case graph runs against the live Docker API
+ * to generate LangSmith trace links for FLEETGRAPH.md.
  *
  * Usage: npx tsx src/scripts/test-run.ts
  */
@@ -24,102 +24,179 @@ if (!GOOGLE_AI_API_KEY) {
 
 const shipClient = new ShipClient(SHIP_API_URL, AGENT_TOKEN);
 const geminiClient = new GeminiClient(GOOGLE_AI_API_KEY);
-
 const graph = buildFleetGraph({ shipClient, geminiClient, workspaceId: WORKSPACE_ID });
 
-async function getProjectByName(name: string): Promise<string | null> {
+async function getProjectByName(name: string): Promise<{ id: string; title: string } | null> {
   const res = await fetch(`${SHIP_API_URL}/api/documents?document_type=project`, {
     headers: { 'Authorization': `Bearer ${AGENT_TOKEN}` },
   });
   const data = await res.json() as any;
   const docs = Array.isArray(data) ? data : (data.data ?? []);
   const match = docs.find((d: any) => d.title?.includes(name));
-  return match?.id ?? null;
+  return match ? { id: match.id, title: match.title } : null;
 }
 
-async function runTest(label: string, projectName: string, triggerType: 'event' | 'on_demand' = 'event', question?: string) {
-  const runId = uuidv4();
+async function getUserByName(name: string): Promise<string | null> {
+  const res = await fetch(`${SHIP_API_URL}/api/documents?document_type=person`, {
+    headers: { 'Authorization': `Bearer ${AGENT_TOKEN}` },
+  });
+  const data = await res.json() as any;
+  const docs = Array.isArray(data) ? data : (data.data ?? []);
+  const match = docs.find((d: any) => d.title === name);
+  return match?.properties?.user_id ?? null;
+}
+
+interface TestResult {
+  label: string;
+  runId: string;
+  violations: number;
+  suggestions: number;
+  mode: string;
+  output: string;
+  elapsed: number;
+}
+
+async function runTest(
+  label: string,
+  input: Record<string, unknown>,
+): Promise<TestResult> {
+  const runId = input.run_id as string;
   console.log(`\n${'='.repeat(60)}`);
   console.log(`${label} — run_id: ${runId}`);
   console.log(`${'='.repeat(60)}`);
 
-  const projectId = await getProjectByName(projectName);
-  if (!projectId) {
-    console.error(`Project "${projectName}" not found`);
-    return;
-  }
-  console.log(`Project: ${projectName} (${projectId})`);
+  const start = Date.now();
+  const result = await graph.invoke(input);
+  const elapsed = Date.now() - start;
 
-  const input: Record<string, unknown> = {
-    trigger_type: triggerType,
-    run_id: runId,
-    target_user_id: '', // Will be filled by fetch
-  };
+  const violations = result.violations?.length ?? 0;
+  const suggestions = result.suggestions?.length ?? 0;
+  const mode = result.gemini_output?.mode ?? 'unknown';
+  const output = result.gemini_output?.content?.slice(0, 300) ?? '';
 
-  if (triggerType === 'event') {
-    input.trigger_payload = {
-      document_ids: [],
-      project_id: projectId,
-      assignee_ids: [],
-    };
-  } else {
-    input.trigger_payload = {
-      user_question: question ?? 'How is this project doing?',
-      view_context: { document_type: 'project', document_id: projectId, title: projectName },
-    };
+  console.log(`Completed in ${elapsed}ms | Mode: ${mode} | Violations: ${violations} | Suggestions: ${suggestions}`);
+  console.log(`Output: ${output}...`);
+
+  if (result.errors?.length > 0) {
+    console.log(`Errors: ${result.errors.map((e: any) => `[${e.node}] ${e.message}`).join(', ')}`);
   }
 
-  try {
-    const start = Date.now();
-    const result = await graph.invoke(input);
-    const elapsed = Date.now() - start;
-
-    console.log(`\nCompleted in ${elapsed}ms`);
-    console.log(`Violations: ${result.violations?.length ?? 0}`);
-    console.log(`Suggestions: ${result.suggestions?.length ?? 0}`);
-    console.log(`Errors: ${result.errors?.length ?? 0}`);
-    console.log(`Gemini mode: ${result.gemini_output?.mode}`);
-    console.log(`\nGemini output:\n${result.gemini_output?.content?.slice(0, 500)}`);
-
-    if (result.violations?.length > 0) {
-      console.log(`\nViolations:`);
-      for (const v of result.violations) {
-        console.log(`  - [${v.type}] ${v.entity_name}: severity ${v.severity}`);
-      }
-    }
-
-    if (result.errors?.length > 0) {
-      console.log(`\nErrors:`);
-      for (const e of result.errors) {
-        console.log(`  - [${e.node}] ${e.message}`);
-      }
-    }
-  } catch (error) {
-    console.error('Graph run failed:', error);
-  }
+  return { label, runId, violations, suggestions, mode, output, elapsed };
 }
 
 async function main() {
-  console.log('FleetGraph Test Runs');
+  console.log('FleetGraph — Full Test Suite (8 Use Cases)');
   console.log(`Ship API: ${SHIP_API_URL}`);
-  console.log(`Gemini model: gemini-2.5-flash`);
-  console.log(`LangSmith project: ${process.env.LANGCHAIN_PROJECT}`);
+  console.log(`Gemini: gemini-2.5-flash`);
+  console.log(`LangSmith: ${process.env.LANGCHAIN_PROJECT ?? 'default'}`);
 
-  // Test 1: Clean run — healthy project
-  await runTest('TRACE 1: Clean Run (Taxpayer Digital Experience)', 'Taxpayer Digital Experience');
+  const results: TestResult[] = [];
 
-  // Test 2: Violation run — overloaded project
-  await runTest('TRACE 2: Violation Run (Direct File)', 'Direct File');
+  // UC1: Director Overview — cross-program portfolio scan
+  const directFile = await getProjectByName('Direct File');
+  results.push(await runTest('UC1: Director Overview', {
+    trigger_type: 'scheduled',
+    trigger_payload: { schedule_type: 'morning_briefing' },
+    target_user_id: '',
+    run_id: uuidv4(),
+  }));
 
-  // Test 3: On-demand chat
-  await runTest(
-    'TRACE 3: On-Demand Chat (Direct File)',
-    'Direct File',
-    'on_demand',
-    'What are the biggest risks on this project?'
-  );
+  // UC2: PM Alert — project with too many in-progress
+  const paymentIntegrity = await getProjectByName('Payment Integrity');
+  if (paymentIntegrity) {
+    results.push(await runTest('UC2: PM Alert (in-progress overload)', {
+      trigger_type: 'event',
+      trigger_payload: { document_ids: [], project_id: paymentIntegrity.id, assignee_ids: [] },
+      target_user_id: '',
+      run_id: uuidv4(),
+    }));
+  }
 
-  console.log('\n\nDone! Check LangSmith for traces.');
+  // UC3: Engineer Nudge — stale high-priority issue
+  const imfMigration = await getProjectByName('Individual Master File');
+  if (imfMigration) {
+    results.push(await runTest('UC3: Engineer Nudge (stale issues)', {
+      trigger_type: 'event',
+      trigger_payload: { document_ids: [], project_id: imfMigration.id, assignee_ids: [] },
+      target_user_id: '',
+      run_id: uuidv4(),
+    }));
+  }
+
+  // UC4: Morning Briefing — daily digest
+  const rachelId = await getUserByName('Rachel Goldberg');
+  results.push(await runTest('UC4: Morning Briefing', {
+    trigger_type: 'scheduled',
+    trigger_payload: { schedule_type: 'morning_briefing' },
+    target_user_id: rachelId ?? '',
+    run_id: uuidv4(),
+  }));
+
+  // UC5: Project Kickoff — orphaned issue clustering
+  if (directFile) {
+    results.push(await runTest('UC5: Project Kickoff Suggestion', {
+      trigger_type: 'on_demand',
+      trigger_payload: {
+        user_question: 'Are there any orphaned issues that should become a new project?',
+        view_context: { document_type: 'workspace', document_id: WORKSPACE_ID, title: 'Treasury' },
+      },
+      target_user_id: '',
+      run_id: uuidv4(),
+    }));
+  }
+
+  // UC6: Coach — work pattern analysis
+  if (rachelId) {
+    results.push(await runTest('UC6: Coach (pattern analysis)', {
+      trigger_type: 'on_demand',
+      trigger_payload: {
+        user_question: 'What are my work patterns and trends over the past few weeks?',
+        view_context: { document_type: 'person', document_id: rachelId, title: 'Rachel Goldberg' },
+      },
+      target_user_id: rachelId,
+      run_id: uuidv4(),
+    }));
+  }
+
+  // UC7: Retro Autopilot — retro draft from completed issues
+  if (directFile) {
+    results.push(await runTest('UC7: Retro Autopilot', {
+      trigger_type: 'on_demand',
+      trigger_payload: {
+        user_question: 'Draft a retrospective for this project based on completed work',
+        view_context: { document_type: 'project', document_id: directFile.id, title: directFile.title },
+      },
+      target_user_id: '',
+      run_id: uuidv4(),
+    }));
+  }
+
+  // UC8: Load Balancer — workload comparison
+  if (directFile) {
+    results.push(await runTest('UC8: Load Balancer', {
+      trigger_type: 'on_demand',
+      trigger_payload: {
+        user_question: 'Can you balance the workload across team members on this project?',
+        view_context: { document_type: 'project', document_id: directFile.id, title: directFile.title },
+      },
+      target_user_id: '',
+      run_id: uuidv4(),
+    }));
+  }
+
+  // Summary
+  console.log(`\n${'='.repeat(60)}`);
+  console.log('SUMMARY');
+  console.log(`${'='.repeat(60)}`);
+  console.log(`\n| # | Use Case | Mode | Violations | Suggestions | Time |`);
+  console.log(`|---|----------|------|------------|-------------|------|`);
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i]!;
+    console.log(`| ${i + 1} | ${r.label} | ${r.mode} | ${r.violations} | ${r.suggestions} | ${r.elapsed}ms |`);
+  }
+
+  console.log(`\nAll ${results.length} traces sent to LangSmith project: ${process.env.LANGCHAIN_PROJECT}`);
+  console.log('View at: https://smith.langchain.com');
 }
 
 main().catch(console.error);

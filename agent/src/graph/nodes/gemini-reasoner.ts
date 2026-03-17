@@ -104,7 +104,9 @@ export function createGeminiReasoner(geminiClient: GeminiClient) {
         });
       }
 
-      const content = await geminiClient.reason(prompt, context);
+      // Cap context to avoid exceeding Gemini token limits (~1M tokens)
+      const cappedContext = context.length > 100_000 ? context.slice(0, 100_000) + '\n...[truncated]' : context;
+      const content = await geminiClient.reason(prompt, cappedContext);
 
       return {
         gemini_output: { mode, content },

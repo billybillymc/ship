@@ -226,3 +226,41 @@ CREATE TABLE agent_actions (
 | Partial fetch failure | Graph continues with available data. If Project Fetch fails but Person Fetch succeeds, threshold evaluator runs with person data only. |
 | Agent process crash | Docker health check restarts it. Suggestions already written to `agent_actions` are unaffected — they live in Ship's database. |
 | WebSocket disconnect | Agent auto-reconnects with 5-second backoff. Events during disconnect are missed but next scheduled run catches up. |
+
+## Test Cases (8 Use Cases)
+
+Each row is a live graph run against the Docker-deployed Ship API with Gemini 2.5 Flash. All traces are in LangSmith project `fleetgraph`.
+
+| # | Use Case | Ship State | Expected Output | Gemini Mode | Result |
+|---|----------|-----------|----------------|-------------|--------|
+| 1 | Director Overview | Scheduled scan across all programs | Portfolio-level health ranking, cross-project pattern detection | DIRECTOR_OVERVIEW | Identified weekly plan submission gaps and workload distribution patterns |
+| 2 | PM Alert | Payment Integrity project: 6 in-progress issues | In-progress overload violation, suggestion to move item back to todo | PROACTIVE_VIOLATIONS | 1 violation detected (in_progress_overload), 1 suggestion generated |
+| 3 | Engineer Nudge | IMF Migration project: 3 issues with 5-day-old updated_at | Stale issue violations for each, nudge to update | PROACTIVE_VIOLATIONS | 3 violations (stale_issue), 3 suggestions with specific issue IDs |
+| 4 | Morning Briefing | Rachel Goldberg's projects scanned | Per-user briefing ranking project risks | DIRECTOR_OVERVIEW | Identified Direct File as high risk, flagged Rachel's 2 high-priority items |
+| 5 | Project Kickoff | Workspace scan for orphaned issues | Evaluation of whether a new project is warranted | PROJECT_KICKOFF | Correctly reported insufficient orphaned issues to justify a project |
+| 6 | Coach | Rachel Goldberg's work history | Pattern analysis with trends and recommendations | COACH | Identified insufficient weekly data, recommended checking back after history accumulates |
+| 7 | Retro Autopilot | Direct File project with completed issues | Retrospective draft with what went well and carryover | ON_DEMAND | Generated retro with completed issue IDs, assignees, and priority analysis |
+| 8 | Load Balancer | Direct File team members compared | Workload comparison with reassignment suggestions | LOAD_BALANCER | Compared Rachel (2 high), Devon (3 active), Aisha (2 active), Carlos (3 active) with specific rebalancing suggestions |
+
+## Architecture Decisions
+
+### 1. Framework: LangGraph
+LangGraph provides conditional branching, parallel node execution (fan-out/fan-in), and native LangSmith tracing — all requirements for this agent. Raw function calls would require manual orchestration of parallel fetches and conditional routing. CrewAI and Autogen are designed for multi-agent collaboration, not single-agent state graphs. LangGraph's `StateGraph` maps directly to our node-edge architecture and produces clean traces showing execution paths.
+
+### 2. AI Model: Gemini 2.5 Flash
+Gemini 2.5 Flash was chosen for all reasoning modes. It provides fast inference (most runs complete in 1-10 seconds), streaming support for the on-demand chat endpoint, and very low cost per call. A single model simplifies deployment and prompt tuning — no model routing logic needed. The 1M context window handles even large project snapshots without summarization.
+
+### 3. Threshold Evaluator Separate from Gemini Reasoner
+The Threshold Evaluator is deterministic math — counting issues by priority and state, comparing against configurable thresholds. It runs on every invocation with zero cost and instant execution. Gemini only runs after thresholds are checked, and its prompt mode (CLEAN vs VIOLATIONS) is determined by the threshold results. This separation ensures: (a) cost control — clean runs get a cheap short summary, (b) testability — threshold logic is unit-tested with fixture data, no API mocking needed, (c) reliability — if Gemini is down, threshold violations still surface as structured alerts.
+
+### 4. Ephemeral Graph State + Persistent agent_actions Table
+Graph runs are stateless and idempotent. Each run starts clean, fetches current data, evaluates, and writes suggestions. No graph state persists between runs. The `agent_actions` table is the only persistence layer — it stores suggestions, their status (pending/approved/dismissed/snoozed), and Gemini's reasoning text. This separation means a crashed run has no side effects beyond what was already written to the database.
+
+### 5. Suggestions as Separate Table, Not Documents
+Ship's "everything is a document" model is for content that users create and edit (issues, projects, wikis). Agent suggestions are ephemeral workflow artifacts with lifecycle state (pending → approved/dismissed), severity scores, and fast queries by user + status. Storing them as documents would pollute the document model with non-content entities and require workarounds for the status workflow. A dedicated `agent_actions` table with proper indexes serves the action queue UI efficiently.
+
+### 6. Hybrid Trigger Model
+Event-driven triggers (WebSocket) detect changes within seconds — when an issue is updated, the agent evaluates the affected project immediately. Scheduled triggers (cron) detect the absence of events — staleness ("no update in 2 days") can never fire a webhook, so an hourly scan is required. Morning briefings are inherently time-based. Pure polling would scan all projects every N minutes looking for changes already known at write time — wasteful. Pure webhooks miss time-based conditions. The hybrid gives sub-minute detection for mutations and scheduled detection for temporal conditions.
+
+### 7. Chat Embedded in Context, Not Standalone
+The on-demand chat panel is a slide-out overlay within the Ship UI, not a separate chatbot page. Opening it on a project scopes the agent to that project's data. This context-awareness is the differentiator — "What are the biggest risks?" means something different on a project page vs. a person page vs. the workspace overview. The agent fetches data based on the current view context and tailors its response accordingly. Closing the panel discards the conversation — on-demand chat is ephemeral, not persistent.
