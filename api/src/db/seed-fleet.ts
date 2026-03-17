@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { readFileSync } from 'fs';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { loadProductionSecrets } from '../config/ssm.js';
 import { WELCOME_DOCUMENT_TITLE, WELCOME_DOCUMENT_CONTENT } from './welcomeDocument.js';
 
@@ -438,27 +439,28 @@ const issueDefinitions: Record<string, Array<{
   projectIndex: number; // which project within the program
 }>> = {
   IRS: [
-    // Direct File
+    // Direct File — OVERLOADED: 9 active high-priority issues (triggers >7 threshold)
     { title: 'Implement W-2 income import via API', state: 'done', priority: 'high', estimate: 8, sprintOffset: -3, projectIndex: 0 },
     { title: 'Build 1099-INT/DIV support for investment income', state: 'done', priority: 'high', estimate: 6, sprintOffset: -3, projectIndex: 0 },
     { title: 'Create standard deduction calculator', state: 'done', priority: 'high', estimate: 4, sprintOffset: -2, projectIndex: 0 },
-    { title: 'Implement state tax return integration (12 pilot states)', state: 'done', priority: 'high', estimate: 12, sprintOffset: -2, projectIndex: 0 },
-    { title: 'Add Earned Income Tax Credit (EITC) eligibility wizard', state: 'done', priority: 'high', estimate: 8, sprintOffset: -1, projectIndex: 0 },
     { title: 'Build e-signature flow compliant with IRS e-file requirements', state: 'in_progress', priority: 'high', estimate: 6, sprintOffset: 0, projectIndex: 0 },
     { title: 'Implement real-time return validation against IRS business rules', state: 'in_progress', priority: 'high', estimate: 10, sprintOffset: 0, projectIndex: 0 },
     { title: 'Add support for dependents and child tax credits', state: 'todo', priority: 'high', estimate: 8, sprintOffset: 0, projectIndex: 0 },
-    { title: 'Create Spanish language version of filing flow', state: 'todo', priority: 'medium', estimate: 6, sprintOffset: 1, projectIndex: 0 },
     { title: 'Build accessibility audit remediation (Section 508)', state: 'todo', priority: 'high', estimate: 8, sprintOffset: 1, projectIndex: 0 },
-    { title: 'Add support for Schedule C (self-employment income)', state: 'backlog', priority: 'medium', estimate: 12, sprintOffset: null, projectIndex: 0 },
-    { title: 'Implement MFA enrollment during filing (Login.gov integration)', state: 'backlog', priority: 'high', estimate: 6, sprintOffset: null, projectIndex: 0 },
+    { title: 'Implement MFA enrollment during filing (Login.gov integration)', state: 'todo', priority: 'high', estimate: 6, sprintOffset: null, projectIndex: 0 },
+    { title: 'Implement state tax return integration (12 pilot states)', state: 'todo', priority: 'high', estimate: 12, sprintOffset: 0, projectIndex: 0 },
+    { title: 'Add Earned Income Tax Credit (EITC) eligibility wizard', state: 'todo', priority: 'high', estimate: 8, sprintOffset: 0, projectIndex: 0 },
+    { title: 'Add support for Schedule C (self-employment income)', state: 'todo', priority: 'high', estimate: 12, sprintOffset: null, projectIndex: 0 },
+    { title: 'Fix critical validation bug in refund amount calculation', state: 'todo', priority: 'high', estimate: 4, sprintOffset: 0, projectIndex: 0 },
+    { title: 'Create Spanish language version of filing flow', state: 'todo', priority: 'medium', estimate: 6, sprintOffset: 1, projectIndex: 0 },
 
-    // IMF Migration
+    // IMF Migration — HAS STALE ISSUES: uses sprintOffset -4 for 4+ day old updated_at
     { title: 'Document existing IMF COBOL batch processing flows', state: 'done', priority: 'high', estimate: 16, sprintOffset: -3, projectIndex: 1 },
     { title: 'Design event-sourced taxpayer account data model', state: 'done', priority: 'high', estimate: 12, sprintOffset: -2, projectIndex: 1 },
     { title: 'Build taxpayer account microservice (read path)', state: 'done', priority: 'high', estimate: 10, sprintOffset: -1, projectIndex: 1 },
-    { title: 'Implement dual-write strategy for parallel running', state: 'in_progress', priority: 'high', estimate: 12, sprintOffset: 0, projectIndex: 1 },
-    { title: 'Create data reconciliation pipeline (mainframe vs cloud)', state: 'in_progress', priority: 'high', estimate: 8, sprintOffset: 0, projectIndex: 1 },
-    { title: 'Build account balance query API with sub-100ms latency', state: 'todo', priority: 'high', estimate: 8, sprintOffset: 1, projectIndex: 1 },
+    { title: 'Implement dual-write strategy for parallel running', state: 'in_progress', priority: 'high', estimate: 12, sprintOffset: -4, projectIndex: 1 },
+    { title: 'Create data reconciliation pipeline (mainframe vs cloud)', state: 'in_progress', priority: 'high', estimate: 8, sprintOffset: -4, projectIndex: 1 },
+    { title: 'Build account balance query API with sub-100ms latency', state: 'todo', priority: 'high', estimate: 8, sprintOffset: -4, projectIndex: 1 },
     { title: 'Migrate refund processing logic from assembly to Java', state: 'todo', priority: 'high', estimate: 20, sprintOffset: 1, projectIndex: 1 },
     { title: 'Design disaster recovery for cloud taxpayer accounts', state: 'backlog', priority: 'medium', estimate: 10, sprintOffset: null, projectIndex: 1 },
 
@@ -515,14 +517,16 @@ const issueDefinitions: Record<string, Array<{
     { title: 'Add support for digital wallet disbursements', state: 'todo', priority: 'medium', estimate: 8, sprintOffset: 1, projectIndex: 0 },
     { title: 'Implement real-time payment reconciliation dashboard', state: 'backlog', priority: 'medium', estimate: 6, sprintOffset: null, projectIndex: 0 },
 
-    // Payment Integrity
+    // Payment Integrity — IN-PROGRESS OVERLOAD: 6 items in progress (triggers >5 threshold)
     { title: 'Build pre-payment identity verification service', state: 'done', priority: 'high', estimate: 10, sprintOffset: -3, projectIndex: 1 },
     { title: 'Implement Do Not Pay integration for all disbursements', state: 'done', priority: 'high', estimate: 8, sprintOffset: -2, projectIndex: 1 },
     { title: 'Create ML model for duplicate payment detection', state: 'done', priority: 'high', estimate: 10, sprintOffset: -1, projectIndex: 1 },
     { title: 'Build real-time fraud scoring API (sub-50ms SLA)', state: 'in_progress', priority: 'high', estimate: 8, sprintOffset: 0, projectIndex: 1 },
     { title: 'Implement deceased person payment intercept', state: 'in_progress', priority: 'high', estimate: 6, sprintOffset: 0, projectIndex: 1 },
-    { title: 'Create payment recovery workflow for identified overpayments', state: 'todo', priority: 'medium', estimate: 8, sprintOffset: 1, projectIndex: 1 },
-    { title: 'Add bank account ownership verification via ACH prenotes', state: 'backlog', priority: 'medium', estimate: 6, sprintOffset: null, projectIndex: 1 },
+    { title: 'Create payment recovery workflow for identified overpayments', state: 'in_progress', priority: 'medium', estimate: 8, sprintOffset: 0, projectIndex: 1 },
+    { title: 'Add bank account ownership verification via ACH prenotes', state: 'in_progress', priority: 'medium', estimate: 6, sprintOffset: 0, projectIndex: 1 },
+    { title: 'Build improper payment reporting dashboard', state: 'in_progress', priority: 'medium', estimate: 5, sprintOffset: 0, projectIndex: 1 },
+    { title: 'Implement cross-agency payment deduplication', state: 'in_progress', priority: 'high', estimate: 10, sprintOffset: 0, projectIndex: 1 },
 
     // Debt Collection
     { title: 'Build debtor self-service portal', state: 'done', priority: 'medium', estimate: 8, sprintOffset: -2, projectIndex: 2 },
@@ -1008,6 +1012,38 @@ async function seedProduction() {
     // ========================================================================
     // WORKSPACE MEMBERSHIPS + PERSON DOCUMENTS
     // ========================================================================
+    // SERVICE ACCOUNT for FleetGraph Agent
+    // ========================================================================
+    const agentEmail = 'agent@ship.internal';
+    const existingAgent = await pool.query('SELECT id FROM users WHERE email = $1', [agentEmail]);
+    if (!existingAgent.rows[0]) {
+      const agentPasswordHash = await bcrypt.hash('agent-service-account-not-for-login', 12);
+      await pool.query(
+        `INSERT INTO users (email, password_hash, name, last_workspace_id)
+         VALUES ($1, $2, $3, $4)`,
+        [agentEmail, agentPasswordHash, 'Ship Agent', workspaceId]
+      );
+      console.log('✅ Created service account user: agent@ship.internal');
+    }
+
+    const agentUserResult = await pool.query('SELECT id FROM users WHERE email = $1', [agentEmail]);
+    const agentUserId = agentUserResult.rows[0].id;
+    const agentToken = 'ship_fleetgraph_dev_token_do_not_use_in_prod';
+    const agentTokenHash = crypto.createHash('sha256').update(agentToken).digest('hex');
+    const existingToken = await pool.query(
+      'SELECT id FROM api_tokens WHERE user_id = $1 AND workspace_id = $2 AND name = $3',
+      [agentUserId, workspaceId, 'FleetGraph Agent']
+    );
+    if (!existingToken.rows[0]) {
+      await pool.query(
+        `INSERT INTO api_tokens (user_id, workspace_id, name, token_hash, token_prefix)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [agentUserId, workspaceId, 'FleetGraph Agent', agentTokenHash, agentToken.substring(0, 8)]
+      );
+      console.log(`✅ Created API token for FleetGraph Agent (token: ${agentToken})`);
+    }
+
+    // ========================================================================
     const allUsersResult = await pool.query('SELECT id, email, name FROM users');
     const emailToUserId = new Map<string, string>();
     for (const u of allUsersResult.rows) {
@@ -1041,6 +1077,13 @@ async function seedProduction() {
         // Find role from team members list
         const memberDef = teamMembers.find(m => m.email === user.email);
         const skills = memberDef ? [memberDef.role] : [];
+        // Derive agent_role from job title for FleetGraph
+        const roleText = memberDef?.role?.toLowerCase() ?? '';
+        const agentRole = roleText.includes('deputy') || roleText.includes('director')
+          ? 'director'
+          : roleText.includes('lead') || roleText.includes('manager')
+          ? 'pm'
+          : 'engineer';
         await pool.query(
           `INSERT INTO documents (workspace_id, document_type, title, properties, created_by)
            VALUES ($1, 'person', $2, $3, $4)`,
@@ -1049,6 +1092,7 @@ async function seedProduction() {
             email: user.email,
             skills,
             capacity_hours: 40,
+            agent_role: agentRole,
           }), user.id]
         );
         personDocsCreated++;
@@ -1343,6 +1387,22 @@ async function seedProduction() {
     }
 
     console.log(issuesCreated > 0 ? `✅ Created ${issuesCreated} issues` : 'ℹ️  All issues already exist');
+
+    // Make IMF Migration stale issues old (sprintOffset -4 = 4+ days old updated_at)
+    // This triggers the staleness detection threshold (>2 days for high priority)
+    const staleResult = await pool.query(
+      `UPDATE documents SET updated_at = NOW() - INTERVAL '5 days'
+       WHERE workspace_id = $1 AND document_type = 'issue'
+         AND title IN (
+           'Implement dual-write strategy for parallel running',
+           'Create data reconciliation pipeline (mainframe vs cloud)',
+           'Build account balance query API with sub-100ms latency'
+         )`,
+      [workspaceId]
+    );
+    if (staleResult.rowCount && staleResult.rowCount > 0) {
+      console.log(`✅ Set ${staleResult.rowCount} issues as stale (5 days old) for FleetGraph detection`);
+    }
 
     // ========================================================================
     // WIKI DOCUMENTS
