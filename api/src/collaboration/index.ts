@@ -10,6 +10,7 @@ import { extractHypothesisFromContent, extractSuccessCriteriaFromContent, extrac
 import { yjsToJson, jsonToYjs } from '../utils/yjsConverter.js';
 import { SESSION_TIMEOUT_MS, ABSOLUTE_SESSION_TIMEOUT_MS } from '@ship/shared';
 import cookie from 'cookie';
+import crypto from 'crypto';
 
 const messageSync = 0;
 const messageAwareness = 1;
@@ -370,6 +371,29 @@ function handleMessage(ws: WebSocket, message: Uint8Array, docName: string, doc:
 
 // Validate session from cookie header - returns userId/workspaceId or null
 async function validateWebSocketSession(request: IncomingMessage): Promise<{ userId: string; workspaceId: string } | null> {
+  // Check for API token auth via query param (for agent/service accounts)
+  const url = new URL(request.url || '', `http://${request.headers.host}`);
+  const token = url.searchParams.get('token');
+  if (token) {
+    try {
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      const result = await pool.query(
+        `SELECT t.user_id, t.workspace_id, t.expires_at, t.revoked_at
+         FROM api_tokens t
+         WHERE t.token_hash = $1`,
+        [tokenHash]
+      );
+      const tokenRow = result.rows[0];
+      if (tokenRow && !tokenRow.revoked_at && (!tokenRow.expires_at || new Date(tokenRow.expires_at) > new Date())) {
+        await pool.query('UPDATE api_tokens SET last_used_at = NOW() WHERE token_hash = $1', [tokenHash]);
+        return { userId: tokenRow.user_id, workspaceId: tokenRow.workspace_id };
+      }
+    } catch {
+      // Fall through to cookie auth
+    }
+  }
+
+  // Fall back to session cookie auth
   const cookieHeader = request.headers.cookie;
   if (!cookieHeader) return null;
 
@@ -622,6 +646,26 @@ export function broadcastToUser(userId: string, eventType: string, data?: Record
 
   if (sentCount > 0) {
     console.log(`[Events] Broadcast '${eventType}' to user ${userId} (${sentCount} connections)`);
+  }
+}
+
+/**
+ * Broadcast a custom event to ALL WebSocket event connections in a workspace.
+ * Used for agent event listeners that need to see all document mutations.
+ */
+export function broadcastToWorkspace(workspaceId: string, eventType: string, data?: Record<string, unknown>): void {
+  const payload = JSON.stringify({ type: eventType, data: data || {} });
+
+  let sentCount = 0;
+  eventConns.forEach((conn, ws) => {
+    if (conn.workspaceId === workspaceId && ws.readyState === WebSocket.OPEN) {
+      ws.send(payload);
+      sentCount++;
+    }
+  });
+
+  if (sentCount > 0) {
+    console.log(`[Events] Broadcast '${eventType}' to workspace ${workspaceId} (${sentCount} connections)`);
   }
 }
 

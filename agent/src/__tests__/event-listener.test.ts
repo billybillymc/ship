@@ -101,4 +101,10 @@ describe('EventListener debounce', () => {
 
     listener.clear();
   });
+
+  it('isConnected returns false when not connected', () => {
+    const listener = new EventListener();
+    expect(listener.isConnected).toBe(false);
+    listener.clear();
+  });
 });

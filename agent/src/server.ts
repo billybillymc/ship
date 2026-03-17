@@ -4,8 +4,13 @@
  */
 import express, { type Express } from 'express';
 import cors from 'cors';
+import { createOnDemandRouter, type OnDemandDeps } from './api/on-demand.js';
 
-export function createServer(): Express {
+export interface ServerDeps {
+  onDemand?: OnDemandDeps;
+}
+
+export function createServer(deps: ServerDeps = {}): Express {
   const app = express();
 
   app.use(cors());
@@ -16,10 +21,10 @@ export function createServer(): Express {
     res.json({ status: 'ok', service: 'fleetgraph-agent' });
   });
 
-  // Agent routes will be mounted here in later steps:
-  // - POST /api/agent/on-demand (SSE streaming chat)
-  // - GET  /api/agent/suggestions
-  // - PATCH /api/agent/suggestions/:id
+  // On-demand chat (SSE streaming)
+  if (deps.onDemand) {
+    app.use('/api/agent/on-demand', createOnDemandRouter(deps.onDemand));
+  }
 
   return app;
 }

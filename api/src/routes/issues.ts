@@ -12,7 +12,7 @@ import {
   TRACKED_FIELDS,
   type BelongsToEntry,
 } from '../utils/document-crud.js';
-import { broadcastToUser } from '../collaboration/index.js';
+import { broadcastToUser, broadcastToWorkspace } from '../collaboration/index.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
@@ -657,6 +657,15 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     const row = result.rows[0];
     const issue = extractIssueFromRow(row);
+
+    // Broadcast issue creation event for FleetGraph agent
+    const projectAssocs = belongsToResult.filter((bt: BelongsToEntry) => bt.type === 'project');
+    broadcastToWorkspace(req.workspaceId!, 'issue:created', {
+      issue_id: newIssueId,
+      project_ids: projectAssocs.map((bt: BelongsToEntry) => bt.id),
+      assignee_id: issue.assignee_id,
+    });
+
     res.status(201).json({
       ...issue,
       display_id: `#${ticketNumber}`,
@@ -996,6 +1005,15 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response) => {
         broadcastToUser(assigneeId, 'accountability:updated', { issueId: id, state: data.state });
       }
     }
+
+    // Broadcast issue change event for FleetGraph agent
+    const projectAssocs = belongsTo.filter((bt: BelongsToEntry) => bt.type === 'project');
+    broadcastToWorkspace(workspaceId, 'issue:updated', {
+      issue_id: id,
+      project_ids: projectAssocs.map((bt: BelongsToEntry) => bt.id),
+      assignee_id: issue.assignee_id,
+      changed_fields: Object.keys(data),
+    });
 
     res.json({ ...issue, display_id: displayId, belongs_to: belongsTo });
   } catch (err) {
