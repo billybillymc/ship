@@ -1,8 +1,8 @@
 /**
  * Hook for managing agent suggestions (action queue).
- * Polls the Ship API for pending suggestions.
+ * Uses WebSocket push for real-time updates, falls back to polling.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiGet, apiPatch } from '../../lib/api';
 
 export interface AgentSuggestion {
@@ -19,6 +19,7 @@ export interface AgentSuggestion {
 export function useAgentSuggestions() {
   const [suggestions, setSuggestions] = useState<AgentSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const fetchSuggestions = useCallback(async () => {
     try {
@@ -35,7 +36,43 @@ export function useAgentSuggestions() {
     }
   }, []);
 
-  // Poll every 30 seconds
+  // WebSocket listener for real-time push
+  useEffect(() => {
+    // Try to connect to Ship's /events WebSocket for agent:suggestion events
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiUrl = import.meta.env.VITE_API_URL ?? '';
+    const wsUrl = apiUrl ? apiUrl.replace(/^http/, 'ws') : `${protocol}//${window.location.host}`;
+
+    try {
+      const ws = new WebSocket(`${wsUrl}/events`);
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'agent:suggestion') {
+            // New suggestion pushed — refresh the list
+            fetchSuggestions();
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+      };
+    } catch {
+      // WebSocket failed — fall back to polling only
+    }
+
+    return () => {
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [fetchSuggestions]);
+
+  // Poll as fallback (every 30s, or as primary if WS unavailable)
   useEffect(() => {
     fetchSuggestions();
     const interval = setInterval(fetchSuggestions, 30_000);

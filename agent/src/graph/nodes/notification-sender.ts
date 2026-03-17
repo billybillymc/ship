@@ -40,6 +40,19 @@ export function createNotificationSender(shipClient: ShipClient, workspaceId: st
           user_id: state.target_user_id,
           message: state.gemini_output.content,
         });
+
+        // Push real-time notification via WebSocket
+        if (state.target_user_id) {
+          try {
+            await shipClient.notifyUser(state.target_user_id, 'agent:suggestion', {
+              suggestion_count: state.suggestions.length,
+              mode: state.gemini_output.mode,
+              preview: state.gemini_output.content.slice(0, 200),
+            });
+          } catch {
+            // WebSocket push is best-effort — frontend falls back to polling
+          }
+        }
       }
     } catch (error) {
       const graphError: GraphError = {

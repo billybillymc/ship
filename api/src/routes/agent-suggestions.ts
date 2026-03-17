@@ -7,6 +7,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../db/client.js';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.js';
+import { broadcastToUser } from '../collaboration/index.js';
 
 type RouterType = ReturnType<typeof Router>;
 const router: RouterType = Router();
@@ -144,6 +145,31 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
   } catch (error) {
     console.error('Failed to update agent suggestion:', error);
     res.status(500).json({ success: false, error: { message: 'Failed to update suggestion' } });
+  }
+});
+
+// ── POST /api/agent/suggestions/notify — push notification via WebSocket ─────
+
+const notifySchema = z.object({
+  user_id: z.string().uuid(),
+  event_type: z.string().min(1),
+  data: z.record(z.unknown()),
+});
+
+router.post('/notify', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const parsed = notifySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: { message: parsed.error.message } });
+      return;
+    }
+
+    const { user_id, event_type, data } = parsed.data;
+    broadcastToUser(user_id, event_type, data);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to send agent notification:', error);
+    res.status(500).json({ success: false, error: { message: 'Failed to send notification' } });
   }
 });
 

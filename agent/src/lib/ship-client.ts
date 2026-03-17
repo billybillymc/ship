@@ -123,6 +123,14 @@ export class ShipClient {
     return Array.isArray(data) ? data : (data.data ?? []);
   }
 
+  async notifyUser(userId: string, eventType: string, data: Record<string, unknown>): Promise<void> {
+    // POST to Ship API which broadcasts via WebSocket
+    await this.fetch('/api/agent/notify', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, event_type: eventType, data }),
+    });
+  }
+
   async updateAgentAction(
     actionId: string,
     updates: { status: string; snooze_until?: string },
