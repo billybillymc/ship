@@ -86,7 +86,8 @@ export interface Violation {
 }
 
 export interface GeminiReasonerOutput {
-  mode: 'PROACTIVE_CLEAN' | 'PROACTIVE_VIOLATIONS' | 'ON_DEMAND';
+  mode: 'PROACTIVE_CLEAN' | 'PROACTIVE_VIOLATIONS' | 'ON_DEMAND'
+    | 'DIRECTOR_OVERVIEW' | 'COACH' | 'RETRO_DRAFT' | 'LOAD_BALANCER' | 'PROJECT_KICKOFF';
   content: string;
   token_count?: number;
 }
