@@ -36,4 +36,4 @@ ENV PORT=3000
 
 # Run migrations and start API
 WORKDIR /app/api
-CMD ["sh", "-c", "node dist/db/migrate.js && node dist/db/seed.js && node dist/index.js"]
+CMD ["sh", "-c", "node dist/db/migrate.js && node dist/db/seed-fleet.js && node dist/index.js"]

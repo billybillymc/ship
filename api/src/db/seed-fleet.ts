@@ -84,8 +84,10 @@ function boldParagraph(boldText: string, normalText: string) {
 
 // Treasury team members — realistic names and roles across bureaus
 const teamMembers = [
+  // Dev login user (same as original seed.ts)
+  { email: 'dev@ship.local', name: 'Dev User', role: 'Deputy CIO, Digital Modernization' },
   // Leadership
-  { email: 'sarah.chen@treasury.gov', name: 'Sarah Chen', role: 'Deputy CIO, Digital Modernization' },
+  { email: 'sarah.chen@treasury.gov', name: 'Sarah Chen', role: 'Director, Enterprise Architecture' },
   { email: 'marcus.washington@treasury.gov', name: 'Marcus Washington', role: 'Director, Enterprise Architecture' },
   { email: 'patricia.rodriguez@treasury.gov', name: 'Patricia Rodriguez', role: 'Director, Cybersecurity Operations' },
   { email: 'james.nakamura@treasury.gov', name: 'James Nakamura', role: 'Director, Cloud Infrastructure' },
@@ -943,9 +945,12 @@ async function seedProduction() {
     // ========================================================================
     // WORKSPACE
     // ========================================================================
+    // Use the same workspace name as the original seed.ts so dev@ship.local
+    // logs into a single workspace with all the FleetGraph data.
+    const WORKSPACE_NAME = 'Ship Workspace';
     const existingWorkspace = await pool.query(
       'SELECT id FROM workspaces WHERE name = $1',
-      ['US Department of the Treasury']
+      [WORKSPACE_NAME]
     );
 
     let workspaceId: string;
@@ -963,10 +968,10 @@ async function seedProduction() {
       const wsResult = await pool.query(
         `INSERT INTO workspaces (name, sprint_start_date)
          VALUES ($1, $2) RETURNING id`,
-        ['US Department of the Treasury', threeMonthsAgo.toISOString().split('T')[0]]
+        [WORKSPACE_NAME, threeMonthsAgo.toISOString().split('T')[0]]
       );
       workspaceId = wsResult.rows[0].id;
-      console.log('✅ Workspace created: US Department of the Treasury');
+      console.log(`✅ Workspace created: ${WORKSPACE_NAME}`);
     }
 
     // ========================================================================
@@ -975,19 +980,18 @@ async function seedProduction() {
     const passwordHash = await bcrypt.hash('admin123', 10);
     let usersCreated = 0;
 
-    // Create dev user first (admin)
+    // Create dev user first (admin — same login as original seed.ts)
     const devUserExists = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['dev@ship.local']);
     if (!devUserExists.rows[0]) {
       await pool.query(
         `INSERT INTO users (email, password_hash, name, last_workspace_id, is_super_admin)
          VALUES ($1, $2, $3, $4, true)`,
-        ['dev@ship.local', passwordHash, 'Sarah Chen', workspaceId]
+        ['dev@ship.local', passwordHash, 'Dev User', workspaceId]
       );
       usersCreated++;
     } else {
-      // Update dev user name to match Treasury persona
       await pool.query(
-        `UPDATE users SET name = 'Sarah Chen', is_super_admin = true, last_workspace_id = $1 WHERE LOWER(email) = 'dev@ship.local'`,
+        `UPDATE users SET is_super_admin = true, last_workspace_id = $1 WHERE LOWER(email) = 'dev@ship.local'`,
         [workspaceId]
       );
     }
