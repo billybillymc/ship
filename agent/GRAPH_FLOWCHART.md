@@ -1,86 +1,93 @@
 # FleetGraph — System Flowchart
 
-## Full System: Entry Points → Graph → Consumers
+## The Agent Loop
+
+The FleetGraph agent is a continuous loop, not a one-shot pipeline. There are two ways the loop re-enters:
+
+1. **Proactive loop**: Issue mutation → WebSocket event → debounce → graph run → suggestion → user approves → Ship API mutation → WebSocket event → graph re-evaluates
+2. **Scheduled loop**: Cron fires → graph run → surfaces new violations → user acts → mutations trigger proactive loop
 
 ```mermaid
 flowchart TD
-    subgraph ENTRY["🔵 Entry Points"]
-        E1["👤 User opens Chat Panel<br/>(on-demand)"]
-        E2["📝 Issue Created/Updated<br/>(WebSocket event)"]
-        E3["⏰ Morning Briefing<br/>(daily cron @ 07:00 UTC)"]
-        E4["⏰ Staleness Scan<br/>(hourly cron)"]
+    subgraph TRIGGERS["🔵 ENTRY POINTS"]
+        E1["👤 User Chat<br/><i>on-demand</i>"]
+        E2["📝 Issue Changed<br/><i>WebSocket event</i>"]
+        E3["⏰ Daily Briefing<br/><i>cron @ 07:00</i>"]
+        E4["⏰ Staleness Scan<br/><i>hourly cron</i>"]
     end
 
-    subgraph DEBOUNCE["⏳ Event Debounce"]
-        DB["30-second window<br/>per project"]
+    DB["⏳ 30s Debounce<br/><i>per project</i>"]
+    E2 --> DB
+
+    subgraph GRAPH["🟡 LANGGRAPH STATE GRAPH"]
+        direction TB
+
+        TC["1. Trigger Context"] --> UC["2. User Context"]
+
+        UC --> FETCH
+
+        subgraph FETCH["⚡ Parallel Fetch (fan-out)"]
+            direction LR
+            PF["3. Project\nFetch"]
+            PeF["4. Person\nFetch"]
+            PrF["5. Program\nFetch"]
+            HF["6. History\nFetch"]
+            RF["7. Retro\nFetch"]
+        end
+
+        FETCH -->|"proactive path"| TE["8. Threshold Evaluator\n<i>deterministic math</i>\n• >7 high priority?\n• >5 in-progress?\n• >2 high/person?\n• stale >2/5/30 days?"]
+
+        FETCH -->|"on-demand path"| GR
+
+        TE --> GR["9. Gemini Reasoner\n<i>gemini-2.5-flash</i>\n<b>ALWAYS RUNS</b>\n8 prompt modes"]
+
+        GR -->|"violations found"| SG["10. Suggestion\nGenerator\n<i>deterministic</i>"]
+        GR -->|"clean / on-demand"| NS
+
+        SG --> NS["11. Notification\nSender"]
     end
 
     E1 --> TC
-    E2 --> DB --> TC
+    DB --> TC
     E3 --> TC
     E4 --> TC
 
-    subgraph GRAPH["🟡 LangGraph StateGraph"]
-
-        TC["1️⃣ Trigger Context<br/>━━━━━━━━━━━━━━━━━<br/>Extracts trigger type +<br/>payload metadata"]
-
-        UC["2️⃣ User Context<br/>━━━━━━━━━━━━━━━━━<br/>Resolves target user<br/>+ role (dir/pm/eng)"]
-
-        TC --> UC
-
-        subgraph FETCH["Parallel Fetch (fan-out)"]
-            direction LR
-            PF["3️⃣ Project<br/>Fetch"]
-            PeF["4️⃣ Person<br/>Fetch"]
-            PrF["5️⃣ Program<br/>Fetch"]
-            HF["6️⃣ History<br/>Fetch"]
-            RF["7️⃣ Retro<br/>Fetch"]
-        end
-
-        UC -->|"event: project + person"| FETCH
-        UC -->|"scheduled: project + person + program"| FETCH
-        UC -->|"on-demand general: project + person"| FETCH
-        UC -->|"on-demand coach: person + history"| FETCH
-
-        TE["8️⃣ Threshold Evaluator<br/>━━━━━━━━━━━━━━━━━━━━<br/>Deterministic math — no AI<br/>• >7 high priority?<br/>• >5 in-progress?<br/>• >2 high per person?<br/>• Stale >2/5/30 days?"]
-
-        GR["9️⃣ Gemini Reasoner<br/>━━━━━━━━━━━━━━━━━━━━<br/>gemini-2.5-flash<br/>ALWAYS RUNS (Rule 4)<br/>8 prompt modes"]
-
-        FETCH -->|"proactive"| TE
-        FETCH -->|"on-demand"| GR
-        TE --> GR
-
-        SG["🔟 Suggestion Generator<br/>━━━━━━━━━━━━━━━━━━━━━<br/>Violations → actions<br/>(deterministic, not AI)<br/>• priority_change<br/>• status_change<br/>• reassignment"]
-
-        NS["1️⃣1️⃣ Notification Sender<br/>━━━━━━━━━━━━━━━━━━━━━<br/>Persists to agent_actions<br/>+ WebSocket push"]
-
-        GR -->|"violations > 0"| SG
-        GR -->|"clean or on-demand"| NS
-        SG --> NS
+    subgraph OUTPUT["🟢 OUTPUT"]
+        direction LR
+        AQ["📋 Action Queue\n<i>approve / dismiss / snooze</i>"]
+        CP["💬 Chat Panel\n<i>SSE streaming</i>"]
+        DB2["🗄️ agent_actions\n<i>persistent history</i>"]
+        LS["📊 LangSmith\n<i>traces</i>"]
     end
 
-    subgraph CONSUMERS["🟢 Consumers"]
-        C1["📋 Action Queue UI<br/>━━━━━━━━━━━━━━━━━<br/>Approve / Dismiss / Snooze<br/>each suggestion"]
-        C2["💬 Chat Panel UI<br/>━━━━━━━━━━━━━━━━━<br/>Streaming SSE response<br/>rendered in real-time"]
-        C3["🗄️ agent_actions Table<br/>━━━━━━━━━━━━━━━━━<br/>Persistent suggestion<br/>history + audit trail"]
-        C4["📊 LangSmith<br/>━━━━━━━━━━━━━━━━━<br/>Full trace of every<br/>graph execution"]
+    NS --> AQ
+    NS --> DB2
+    GR -.->|"streaming tokens"| CP
+    GRAPH -.-> LS
+
+    subgraph HITL["🔴 HUMAN-IN-THE-LOOP"]
+        APPROVE["✅ Approve\n<i>executes the change</i>"]
+        DISMISS["❌ Dismiss\n<i>archived, won't repeat\nunless condition worsens</i>"]
+        SNOOZE["💤 Snooze\n<i>re-evaluate after\n24h or 1 week</i>"]
     end
 
-    NS -->|"suggestions"| C1
-    NS -->|"suggestions"| C3
-    GR -->|"streaming"| C2
-    GRAPH -->|"trace metadata"| C4
+    AQ --> APPROVE
+    AQ --> DISMISS
+    AQ --> SNOOZE
 
-    subgraph HITL["🔴 Human-in-the-Loop"]
-        A1["✅ Approve → Ship API<br/>executes the mutation<br/>(changes priority/status)"]
-        A2["❌ Dismiss → archived<br/>won't resurface unless<br/>condition worsens"]
-        A3["💤 Snooze → re-evaluate<br/>after 24h/1 week"]
-    end
+    %% === THE LOOP ===
+    APPROVE -->|"PATCH /api/issues/:id\nchanges priority or status"| MUTATION["📝 Ship API\nMutation"]
+    MUTATION -->|"broadcasts\nissue:updated"| E2
 
-    C1 --> A1
-    C1 --> A2
-    C1 --> A3
-    A1 -->|"PATCH /api/issues/:id"| E2
+    SNOOZE -->|"snooze expires"| E4
+
+    %% Styling
+    style MUTATION fill:#fef3c7,stroke:#d97706
+    style E2 fill:#dbeafe,stroke:#3b82f6
+    style E4 fill:#dbeafe,stroke:#3b82f6
+    style APPROVE fill:#d1fae5,stroke:#059669
+    style DISMISS fill:#f3f4f6,stroke:#6b7280
+    style SNOOZE fill:#dbeafe,stroke:#3b82f6
 ```
 
 ## Gemini Mode Selection
@@ -136,23 +143,32 @@ flowchart LR
     style M8 fill:#f5f5f4
 ```
 
-## Feedback Loop: Approve → Mutation → Event → Re-evaluation
+## The Loop in Plain English
 
-```mermaid
-flowchart LR
-    A["Agent detects<br/>9 high-priority<br/>issues"] --> S["Suggests: demote<br/>issue #11 to<br/>medium priority"]
-    S --> Q["Action Queue:<br/>user sees card"]
-    Q -->|"Approve"| M["Ship API:<br/>PATCH /api/issues/11<br/>priority → medium"]
-    M --> WS["WebSocket:<br/>issue:updated<br/>event fired"]
-    WS --> DB["30s debounce"]
-    DB --> R["Agent re-evaluates:<br/>now 8 high-priority<br/>(still over threshold)"]
-    R --> S2["New suggestion:<br/>demote issue #6"]
-
-    style A fill:#fee2e2
-    style S fill:#fef3c7
-    style Q fill:#dbeafe
-    style M fill:#d1fae5
-    style WS fill:#e0e7ff
-    style R fill:#fee2e2
-    style S2 fill:#fef3c7
 ```
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│  ENTRY: Issue changes in Ship (or cron fires)           │
+│    ↓                                                    │
+│  DEBOUNCE: 30 seconds per project                       │
+│    ↓                                                    │
+│  FETCH: Get project issues + person workload            │
+│    ↓                                                    │
+│  EVALUATE: Check thresholds (deterministic, no AI)      │
+│    ↓                                                    │
+│  REASON: Gemini 2.5 Flash analyzes (always runs)        │
+│    ↓                                                    │
+│  SUGGEST: Map violations → concrete actions             │
+│    ↓                                                    │
+│  PERSIST: Write to agent_actions + notify user          │
+│    ↓                                                    │
+│  HUMAN: User sees suggestion → Approve / Dismiss / Snooze│
+│    ↓                                                    │
+│  IF APPROVE: Ship API patches the issue                 │
+│    ↓                                                    │
+│  LOOP: Mutation fires WebSocket event → back to top     │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+The agent never stops. Proactive mode loops through events continuously. Scheduled mode adds periodic sweeps. On-demand mode is a user-initiated single pass through the graph that returns a streaming response.
