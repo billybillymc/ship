@@ -71,6 +71,33 @@ export function useAgentChat() {
                 }
                 return updated;
               });
+            } else if (event.type === 'violations' && event.violations?.length > 0) {
+              const summary = '\n\n---\n**Violations Detected (' + event.count + '):**\n' +
+                event.violations.map((v: { type: string; entity_name: string; severity: number }) =>
+                  `- [${v.type}] ${v.entity_name} (severity: ${v.severity})`
+                ).join('\n');
+              setMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === 'agent') {
+                  updated[updated.length - 1] = { ...last, content: last.content + summary };
+                }
+                return updated;
+              });
+            } else if (event.type === 'suggestions' && event.suggestions?.length > 0) {
+              const summary = '\n\n**Suggested Actions (' + event.count + '):**\n' +
+                event.suggestions.map((s: { action_type: string; suggestion: Record<string, unknown> }) =>
+                  `- ${s.action_type}: change ${s.suggestion['field']} from "${s.suggestion['from']}" to "${s.suggestion['to']}"`
+                ).join('\n') +
+                '\n\n_Check the Action Queue to approve or dismiss these._';
+              setMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === 'agent') {
+                  updated[updated.length - 1] = { ...last, content: last.content + summary };
+                }
+                return updated;
+              });
             }
           } catch {
             // skip malformed events

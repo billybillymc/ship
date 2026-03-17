@@ -25,6 +25,31 @@ export interface GraphDependencies {
   workspaceId: string;
 }
 
+/**
+ * Detect if an on-demand question is a "command" that should run
+ * the proactive path (thresholds + suggestions) instead of just chat.
+ */
+function isCommandQuestion(question: string | null): boolean {
+  if (!question) return false;
+  const q = question.toLowerCase();
+  return /health\s*check|run.*check|scan.*project|scan.*program|check.*threshold/.test(q)
+    || /morning\s*briefing|daily\s*briefing|give.*briefing/.test(q)
+    || /stale\s*issue|check.*stale|find.*stale|overdue/.test(q)
+    || /scan\s*all|scan.*program|portfolio.*scan|risk.*scan/.test(q);
+}
+
+function isCoachQuestion(question: string | null): boolean {
+  if (!question) return false;
+  const q = question.toLowerCase();
+  return /coach|pattern|trend/.test(q);
+}
+
+function isScanAllQuestion(question: string | null): boolean {
+  if (!question) return false;
+  const q = question.toLowerCase();
+  return /scan\s*all|all\s*program|portfolio|director.*overview|morning.*briefing|daily.*briefing/.test(q);
+}
+
 export function buildFleetGraph(deps: GraphDependencies) {
   const projectFetch = createProjectFetch(deps.shipClient);
   const personFetch = createPersonFetch(deps.shipClient);
@@ -51,52 +76,46 @@ export function buildFleetGraph(deps: GraphDependencies) {
     .addEdge('__start__', 'triggerContext')
     .addEdge('triggerContext', 'userContext')
 
-    // User context → parallel fetch (fan-out based on trigger type)
+    // User context → parallel fetch (fan-out based on trigger type + question)
     .addConditionalEdges('userContext', (state: FleetGraphState) => {
       if (state.trigger_type === 'on_demand') {
-        const question = state.user_question?.toLowerCase() ?? '';
-        // Coach needs history; load balancer needs person data
-        if (question.includes('coach') || question.includes('pattern') || question.includes('trend')) {
+        const q = state.user_question;
+        if (isCoachQuestion(q)) {
           return ['personFetch', 'historyFetch'];
         }
-        if (question.includes('load') || question.includes('balance') || question.includes('workload')) {
-          return ['projectFetch', 'personFetch'];
+        if (isScanAllQuestion(q)) {
+          return ['projectFetch', 'personFetch', 'programFetch'];
         }
         return ['projectFetch', 'personFetch'];
       }
       if (state.trigger_type === 'scheduled') {
-        // Scheduled runs fetch broadly
         return ['projectFetch', 'personFetch', 'programFetch'];
       }
-      // Event-driven: fetch affected project + person
       return ['projectFetch', 'personFetch'];
     })
 
-    // Fetch fan-in → threshold evaluator (or Gemini for on-demand)
+    // Fetch fan-in: commands go through thresholds, pure chat skips to Gemini
     .addConditionalEdges('projectFetch', (state: FleetGraphState) => {
-      if (state.trigger_type === 'on_demand') {
+      if (state.trigger_type === 'on_demand' && !isCommandQuestion(state.user_question)) {
         return ['geminiReasoner'];
       }
       return ['thresholdEvaluator'];
     })
     .addConditionalEdges('personFetch', (state: FleetGraphState) => {
-      if (state.trigger_type === 'on_demand') {
+      if (state.trigger_type === 'on_demand' && !isCommandQuestion(state.user_question)) {
         return ['geminiReasoner'];
       }
       return ['thresholdEvaluator'];
     })
     .addConditionalEdges('programFetch', (state: FleetGraphState) => {
-      if (state.trigger_type === 'on_demand') {
+      if (state.trigger_type === 'on_demand' && !isCommandQuestion(state.user_question)) {
         return ['geminiReasoner'];
       }
       return ['thresholdEvaluator'];
     })
     .addConditionalEdges('historyFetch', (_state: FleetGraphState) => {
-      // History is only fetched for on-demand coach mode
       return ['geminiReasoner'];
     })
-
-    // RetroFetch runs after projectFetch populates project_data
     .addConditionalEdges('retroFetch', (_state: FleetGraphState) => {
       return ['geminiReasoner'];
     })
@@ -104,9 +123,11 @@ export function buildFleetGraph(deps: GraphDependencies) {
     // Threshold → Gemini (always runs, per Rule 4)
     .addEdge('thresholdEvaluator', 'geminiReasoner')
 
-    // After Gemini: conditional routing based on violations
+    // After Gemini: route to suggestions if violations found
+    // Commands in on-demand mode now also generate suggestions
     .addConditionalEdges('geminiReasoner', (state: FleetGraphState) => {
-      if (state.trigger_type === 'on_demand') {
+      if (state.trigger_type === 'on_demand' && !isCommandQuestion(state.user_question)) {
+        // Pure chat: no suggestions
         return ['notificationSender'];
       }
       if (state.violations.length > 0) {
@@ -115,10 +136,7 @@ export function buildFleetGraph(deps: GraphDependencies) {
       return ['notificationSender'];
     })
 
-    // Suggestion generator → notification sender
     .addEdge('suggestionGenerator', 'notificationSender')
-
-    // Terminal
     .addEdge('notificationSender', END);
 
   return graph.compile();
