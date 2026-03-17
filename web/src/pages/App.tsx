@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { AgentChatPanel } from '@/components/agent/AgentChatPanel';
+import { AgentSuggestionsPanel } from '@/components/agent/AgentSuggestionsPanel';
 import { Link, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useQueryClient } from '@tanstack/react-query';
@@ -56,6 +58,7 @@ export function AppLayout() {
   const [projectSetupWizardOpen, setProjectSetupWizardOpen] = useState(false);
   const [actionItemsModalOpen, setActionItemsModalOpen] = useState(false);
   const [actionItemsModalShownOnLoad, setActionItemsModalShownOnLoad] = useState(false);
+  const [agentPanelMode, setAgentPanelMode] = useState<'closed' | 'suggestions' | 'chat'>('closed');
 
   // Session timeout handling
   const handleSessionTimeout = useCallback(() => {
@@ -402,6 +405,12 @@ export function AppLayout() {
           {/* User avatar & settings at bottom */}
           <div className="flex flex-col items-center gap-2">
             <RailIcon
+              icon={<AgentIcon />}
+              label="FleetGraph"
+              active={agentPanelMode !== 'closed'}
+              onClick={() => setAgentPanelMode(prev => prev === 'closed' ? 'suggestions' : 'closed')}
+            />
+            <RailIcon
               icon={<SettingsIcon />}
               label="Settings"
               active={activeMode === 'settings'}
@@ -548,6 +557,17 @@ export function AppLayout() {
         {/* Portal content from Editor will be rendered here via React Portal */}
         <aside id="properties-portal" aria-label="Document properties" className="flex flex-col" />
       </div>
+
+      {/* FleetGraph Agent Panels */}
+      <AgentSuggestionsPanel
+        isOpen={agentPanelMode === 'suggestions'}
+        onClose={() => setAgentPanelMode('closed')}
+        onOpenChat={() => setAgentPanelMode('chat')}
+      />
+      <AgentChatPanel
+        isOpen={agentPanelMode === 'chat'}
+        onClose={() => setAgentPanelMode('closed')}
+      />
 
       {/* Command Palette (Cmd+K) */}
       <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
@@ -1806,6 +1826,14 @@ function TeamIcon() {
   return (
     <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+    </svg>
+  );
+}
+
+function AgentIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 14.5M14.25 3.104c.251.023.501.05.75.082M19.8 14.5l-2.303 2.303a2.25 2.25 0 01-1.591.659H8.094a2.25 2.25 0 01-1.591-.659L4.2 14.5m15.6 0l.4-.401a2.25 2.25 0 000-3.182L17.25 8M4.2 14.5l-.4-.401a2.25 2.25 0 010-3.182L6.75 8" />
     </svg>
   );
 }
