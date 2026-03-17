@@ -169,6 +169,16 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
       }
     }
 
+    // Filter by project via junction table
+    const project_id = req.query['project_id'];
+    if (project_id) {
+      query += ` AND EXISTS (
+        SELECT 1 FROM document_associations da
+        WHERE da.document_id = d.id AND da.related_id = $${params.length + 1} AND da.relationship_type = 'project'
+      )`;
+      params.push(project_id as string);
+    }
+
     // Filter by program via junction table
     if (program_id) {
       query += ` AND EXISTS (

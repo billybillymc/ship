@@ -28,11 +28,12 @@ describe('ShipClient live integration', () => {
     client = new ShipClient(SHIP_API_URL, AGENT_TOKEN);
   });
 
-  it.skipIf(!true)('can fetch issues via bearer token auth', async () => {
+  it('can fetch issues via bearer token auth', async () => {
     if (!apiAvailable) return;
-    const issues = await client.getProjectIssues('nonexistent-project');
-    // Non-existent project returns empty array (not 404)
+    // Use a valid UUID format that doesn't match any project — returns empty array
+    const issues = await client.getProjectIssues('00000000-0000-0000-0000-000000000000');
     expect(Array.isArray(issues)).toBe(true);
+    expect(issues).toHaveLength(0);
   });
 
   it('can fetch all issues (no project filter)', async () => {

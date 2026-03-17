@@ -12,6 +12,11 @@ export function createNotificationSender(shipClient: ShipClient, workspaceId: st
     try {
       // Persist each suggestion to the agent_actions table
       for (const suggestion of state.suggestions) {
+        // Skip persistence if required IDs are missing
+        if (!workspaceId || !suggestion.target_user_id) {
+          console.warn(`Skipping suggestion persistence: missing workspace_id or target_user_id`);
+          continue;
+        }
         try {
           await shipClient.createAgentAction({
             workspace_id: workspaceId,
