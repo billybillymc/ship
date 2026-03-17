@@ -3,6 +3,7 @@
  * Each card has approve/dismiss/snooze buttons.
  */
 import { useAgentSuggestions, type AgentSuggestion } from './useAgentSuggestions';
+import { AgentBriefing } from './AgentBriefing';
 
 interface AgentSuggestionsPanelProps {
   isOpen: boolean;
@@ -97,20 +98,32 @@ export function AgentSuggestionsPanel({ isOpen, onClose, onOpenChat }: AgentSugg
 
       {/* Suggestions list */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {suggestions.length === 0 ? (
+        {/* Briefings at top */}
+        {suggestions
+          .filter(s => s.action_type === 'briefing')
+          .map(s => (
+            <AgentBriefing key={s.id} briefing={s} onDismiss={() => dismiss(s.id)} />
+          ))
+        }
+
+        {/* Action suggestions */}
+        {suggestions.filter(s => s.action_type !== 'briefing').length === 0 &&
+         suggestions.filter(s => s.action_type === 'briefing').length === 0 ? (
           <p className="text-sm text-muted text-center mt-8">
             No pending suggestions
           </p>
         ) : (
-          suggestions.map(s => (
-            <SuggestionCard
-              key={s.id}
-              suggestion={s}
-              onApprove={() => approve(s.id)}
-              onDismiss={() => dismiss(s.id)}
-              onSnooze={() => snooze(s.id, 24)}
-            />
-          ))
+          suggestions
+            .filter(s => s.action_type !== 'briefing')
+            .map(s => (
+              <SuggestionCard
+                key={s.id}
+                suggestion={s}
+                onApprove={() => approve(s.id)}
+                onDismiss={() => dismiss(s.id)}
+                onSnooze={() => snooze(s.id, 24)}
+              />
+            ))
         )}
       </div>
     </div>
