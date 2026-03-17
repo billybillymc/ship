@@ -1,0 +1,39 @@
+# Development Dockerfile for FleetGraph Agent
+FROM node:20-slim
+
+WORKDIR /app
+
+# Disable SSL strict mode for government VPN environments
+RUN npm config set strict-ssl false
+
+# Install pnpm
+RUN npm install -g pnpm@10 && pnpm config set strict-ssl false
+
+# Copy workspace config
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY agent/package.json ./agent/
+
+# Create minimal stubs for other workspace packages
+RUN mkdir -p api && echo '{"name":"@ship/api","version":"0.0.0","private":true}' > api/package.json
+RUN mkdir -p web && echo '{"name":"@ship/web","version":"0.0.0","private":true}' > web/package.json
+RUN mkdir -p shared && echo '{"name":"@ship/shared","version":"0.0.0","private":true}' > shared/package.json
+
+# Install agent dependencies only
+RUN pnpm install --filter @ship/agent --ignore-scripts
+
+# Copy agent source
+COPY agent/ ./agent/
+
+# Build agent
+RUN pnpm --filter @ship/agent build
+
+# Expose agent port
+EXPOSE 3001
+
+# Set environment
+ENV NODE_ENV=development
+ENV AGENT_PORT=3001
+
+# Start agent
+WORKDIR /app/agent
+CMD ["node", "dist/index.js"]

@@ -1,5 +1,5 @@
 # =============================================================================
-# Local development environment for Ship API
+# Local development environment for Ship API + FleetGraph Agent
 # =============================================================================
 # Start the full stack:
 #   pnpm docker:up
@@ -11,6 +11,8 @@
 #     - OpenAPI JSON: http://localhost:3000/api/openapi.json
 #     - Health check: http://localhost:3000/health
 #   - Web Frontend: localhost:5173
+#   - FleetGraph Agent: localhost:3001
+#     - Health check: http://localhost:3001/health
 #
 # The API automatically runs migrations and seeds on startup.
 # =============================================================================
@@ -56,6 +58,27 @@ services:
       - "5173:5173"
     environment:
       VITE_API_URL: http://localhost:3000
+      VITE_AGENT_URL: http://localhost:3001
+    depends_on:
+      - api
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      AGENT_PORT: 3001
+      SHIP_API_URL: http://api:3000
+      SHIP_WS_URL: ws://api:3000
+      AGENT_SERVICE_TOKEN: ship_fleetgraph_dev_token_do_not_use_in_prod
+      WORKSPACE_ID: ${WORKSPACE_ID:-}
+      GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-true}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-fleetgraph}
     depends_on:
       - api
 
