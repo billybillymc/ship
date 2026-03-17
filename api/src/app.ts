@@ -33,6 +33,7 @@ import accountabilityRoutes from './routes/accountability.js';
 import aiRoutes from './routes/ai.js';
 import weeklyPlansRoutes, { weeklyRetrosRouter } from './routes/weekly-plans.js';
 import { documentCommentsRouter, commentsRouter } from './routes/comments.js';
+import agentSuggestionsRoutes from './routes/agent-suggestions.js';
 import { setupSwagger } from './swagger.js';
 import { initializeCAIA } from './services/caia.js';
 
@@ -231,6 +232,9 @@ export function createApp(corsOrigin: string = 'http://localhost:5173'): express
 
   // File upload routes (CSRF protected for POST endpoints)
   app.use('/api/files', conditionalCsrf, filesRouter);
+
+  // Agent suggestions routes (FleetGraph)
+  app.use('/api/agent/suggestions', conditionalCsrf, agentSuggestionsRoutes);
 
   // Comments routes
   app.use('/api/documents', conditionalCsrf, documentCommentsRouter);
