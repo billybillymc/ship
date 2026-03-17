@@ -28,7 +28,7 @@ export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps
   };
 
   const handleClose = () => {
-    clearChat();
+    // Don't clear messages — keep history when panel is closed
     onClose();
   };
 
@@ -46,6 +46,15 @@ export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps
             </p>
           )}
         </div>
+        <div className="flex items-center gap-1">
+        {messages.length > 0 && (
+          <button
+            onClick={clearChat}
+            className="rounded px-2 py-1 text-xs text-muted hover:bg-border/50 hover:text-foreground"
+          >
+            Clear
+          </button>
+        )}
         <button
           onClick={handleClose}
           className="rounded p-1 text-muted hover:bg-border/50 hover:text-foreground"
@@ -55,6 +64,7 @@ export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
+        </div>
       </div>
 
       {/* Messages */}

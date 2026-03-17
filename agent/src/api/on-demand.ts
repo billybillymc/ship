@@ -30,6 +30,23 @@ export function createOnDemandRouter(deps: OnDemandDeps): Router {
       return;
     }
 
+    // Guardrail: reject off-topic questions
+    const lowerQ = question.toLowerCase();
+    const offTopicPatterns = [
+      /write.*code|write.*script|write.*program/,
+      /ignore.*instructions|ignore.*prompt|ignore.*system/,
+      /pretend.*you.*are|act.*as.*if|role.*play/,
+      /recipe|weather|joke|poem|story|lyrics|translate/,
+      /how.*to.*hack|exploit|vulnerability|injection/,
+    ];
+    const isOffTopic = offTopicPatterns.some(p => p.test(lowerQ));
+    if (isOffTopic) {
+      res.status(400).json({
+        error: 'FleetGraph can only answer questions about your projects, issues, team workload, and workspace. Please ask something related to your work in Ship.',
+      });
+      return;
+    }
+
     // Set up SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
