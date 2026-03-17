@@ -405,10 +405,16 @@ export function AppLayout() {
           {/* User avatar & settings at bottom */}
           <div className="flex flex-col items-center gap-2">
             <RailIcon
+              icon={<ChatIcon />}
+              label="FleetGraph Chat"
+              active={agentPanelMode === 'chat'}
+              onClick={() => setAgentPanelMode(prev => prev === 'chat' ? 'closed' : 'chat')}
+            />
+            <RailIcon
               icon={<AgentIcon />}
-              label="FleetGraph"
-              active={agentPanelMode !== 'closed'}
-              onClick={() => setAgentPanelMode(prev => prev === 'closed' ? 'suggestions' : 'closed')}
+              label="FleetGraph Actions"
+              active={agentPanelMode === 'suggestions'}
+              onClick={() => setAgentPanelMode(prev => prev === 'suggestions' ? 'closed' : 'suggestions')}
             />
             <RailIcon
               icon={<SettingsIcon />}
@@ -567,6 +573,26 @@ export function AppLayout() {
       <AgentChatPanel
         isOpen={agentPanelMode === 'chat'}
         onClose={() => setAgentPanelMode('closed')}
+        context={(() => {
+          const docId = currentDocumentId;
+          const docType = currentDocumentType;
+          if (docId && docType) {
+            // Look up title from the appropriate context
+            let title = '';
+            if (docType === 'project') {
+              title = projects.find(p => p.id === docId)?.title ?? '';
+            } else if (docType === 'program') {
+              title = programs.find(p => p.id === docId)?.name ?? '';
+            } else if (docType === 'issue') {
+              title = issues.find(i => i.id === docId)?.title ?? '';
+            } else if (docType === 'wiki') {
+              title = documents.find(d => d.id === docId)?.title ?? '';
+            }
+            return { document_type: docType, document_id: docId, title: title || docType };
+          }
+          // Fallback to workspace context
+          return { document_type: 'workspace', document_id: currentWorkspace?.id ?? '', title: currentWorkspace?.name ?? 'Workspace' };
+        })()}
       />
 
       {/* Command Palette (Cmd+K) */}
@@ -1826,6 +1852,14 @@ function TeamIcon() {
   return (
     <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
     </svg>
   );
 }

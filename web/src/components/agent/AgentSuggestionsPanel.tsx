@@ -8,7 +8,7 @@ import { AgentBriefing } from './AgentBriefing';
 interface AgentSuggestionsPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenChat: () => void;
+  onOpenChat?: () => void;
 }
 
 function SuggestionCard({
@@ -78,12 +78,6 @@ export function AgentSuggestionsPanel({ isOpen, onClose, onOpenChat }: AgentSugg
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold text-foreground">FleetGraph Actions</h2>
         <div className="flex gap-1">
-          <button
-            onClick={onOpenChat}
-            className="rounded px-2 py-1 text-xs text-muted hover:bg-border/50 hover:text-foreground"
-          >
-            Chat
-          </button>
           <button
             onClick={onClose}
             className="rounded p-1 text-muted hover:bg-border/50 hover:text-foreground"
