@@ -33,39 +33,34 @@ The agent authenticates as a service account (`agent@ship.internal`) with a long
 ### Graph Diagram
 
 ```mermaid
-graph TD
-    START([Start]) --> TC[Trigger Context]
-    TC --> UC[User Context]
-
-    UC --> PF[Project Fetch]
-    UC --> PeF[Person Fetch]
-
-    PF -->|proactive| TE[Threshold Evaluator]
-    PeF -->|proactive| TE
-
-    PF -->|on-demand| GR[Gemini Reasoner]
-    PeF -->|on-demand| GR
-
-    TE --> GR
-
-    GR -->|violations > 0| SG[Suggestion Generator]
-    GR -->|clean run| NS[Notification Sender]
-    GR -->|on-demand| NS
-
+flowchart TD
+    E1["User Chat"] --> TC
+    E2["Issue Changed via WebSocket"] --> DB["30s Debounce"]
+    DB --> TC
+    E3["Morning Briefing Cron - daily"] --> TC
+    E4["Staleness Scan Cron - hourly"] --> TC
+    TC["Trigger Context"] --> UC["User Context"]
+    UC -->|parallel| PF["Project Fetch"]
+    UC -->|parallel| PeF["Person Fetch"]
+    UC -->|scheduled| PrF["Program Fetch"]
+    UC -->|coach| HF["History Fetch"]
+    PF --> TE["Threshold Evaluator"]
+    PeF --> TE
+    PrF --> TE
+    HF --> GR
+    TE --> GR["Gemini Reasoner - 2.5 Flash"]
+    GR -->|violations| SG["Suggestion Generator"]
+    GR -->|clean| NS["Notification Sender"]
     SG --> NS
-    NS --> END([End])
-
-    style TC fill:#e0f2fe
-    style UC fill:#e0f2fe
-    style PF fill:#dbeafe
-    style PeF fill:#dbeafe
-    style TE fill:#fef3c7
-    style GR fill:#fde68a
-    style SG fill:#fed7aa
-    style NS fill:#d1fae5
+    NS --> AQ["Action Queue"]
+    AQ --> APPROVE["Approve"]
+    AQ --> DISMISS["Dismiss"]
+    AQ --> SNOOZE["Snooze"]
+    APPROVE --> MUTATE["Ship API Mutation"]
+    MUTATE -->|fires event| E2
 ```
 
-### Node Descriptions
+### Node Inventory (11 nodes)
 
 | Node | Type | Description |
 |------|------|-------------|
@@ -73,16 +68,19 @@ graph TD
 | User Context | Context | Resolves target user and their role (director/pm/engineer) |
 | Project Fetch | Fetch | Retrieves project + issues from Ship API via `ShipClient` |
 | Person Fetch | Fetch | Retrieves all issues assigned to the target user |
+| Program Fetch | Fetch | Retrieves all programs and projects for director overview |
+| History Fetch | Fetch | Retrieves past agent_actions for coach pattern detection |
+| Retro Fetch | Fetch | Splits project issues into completed vs carryover for retro drafts |
 | Threshold Evaluator | Reasoning | Deterministic math — checks all thresholds, outputs violations list. No Gemini. |
-| Gemini Reasoner | Reasoning | Always runs. Clean runs get health summary; violation runs get deep analysis; on-demand answers the user's question. Uses `gemini-2.5-flash`. |
+| Gemini Reasoner | Reasoning | Always runs (8 prompt modes). Clean runs get health summary; violation runs get deep analysis; on-demand answers the user's question. Uses `gemini-2.5-flash`. |
 | Suggestion Generator | Action | Maps violations to concrete actions deterministically. Gemini provides explanation text, not the action itself. |
-| Notification Sender | Output | Persists suggestions to `agent_actions` table via Ship API |
+| Notification Sender | Output | Persists suggestions to `agent_actions` table via Ship API + WebSocket push |
 
 ### Conditional Edges
 
-1. **After User Context → Fetch**: Both project and person fetch run in parallel (LangGraph fan-out).
-2. **After Fetch → Threshold or Gemini**: Proactive runs go through Threshold Evaluator first. On-demand runs skip directly to Gemini Reasoner.
-3. **After Gemini → Suggestion or Notification**: If violations exist, Suggestion Generator creates pending actions. If clean, only a summary notification is sent. On-demand skips suggestions entirely.
+1. **After User Context → Fetch**: Fetch nodes run in parallel (LangGraph fan-out). Event/scheduled runs fetch project + person. Scheduled also fetches programs. Coach questions fetch person + history.
+2. **After Fetch → Threshold or Gemini**: Proactive and command runs go through Threshold Evaluator first. Pure on-demand chat skips directly to Gemini Reasoner.
+3. **After Gemini → Suggestion or Notification**: If violations exist, Suggestion Generator creates pending actions. If clean, only a summary notification is sent.
 
 ### Execution Paths
 
@@ -94,6 +92,15 @@ graph TD
 
 **On-Demand Chat:**
 `Trigger → User → [Project Fetch ∥ Person Fetch] → Gemini (ON_DEMAND) → Notification`
+
+**On-Demand Command (health check, stale scan):**
+`Trigger → User → [Project Fetch ∥ Person Fetch] → Threshold → Gemini → Suggestion Generator → Notification`
+
+**Director Overview (scheduled):**
+`Trigger → User → [Project Fetch ∥ Person Fetch ∥ Program Fetch] → Threshold → Gemini (DIRECTOR_OVERVIEW) → Notification`
+
+**Coach (on-demand):**
+`Trigger → User → [Person Fetch ∥ History Fetch] → Gemini (COACH) → Notification`
 
 ## Trigger Model
 
@@ -120,21 +127,26 @@ Event-driven cost scales with write volume, not project count. Gemini calls happ
 
 All graph runs are traced via LangSmith with metadata: `trigger_type`, `project_id`, `target_user_id`, `run_id`.
 
-### Trace 1: Clean Run
-- **Project**: Taxpayer Digital Experience (healthy, 6 issues, no threshold violations)
-- **Path**: Trigger → User → Fetch → Threshold (0 violations) → Gemini (PROACTIVE_CLEAN) → Notification
-- **Gemini output**: Short health summary confirming project is on track
+### Shared Trace Links
 
-### Trace 2: Violation Run
-- **Project**: Direct File — Free Filing Platform (9 high-priority issues, exceeds >7 threshold)
-- **Path**: Trigger → User → Fetch → Threshold (priority_overload violation) → Gemini (PROACTIVE_VIOLATIONS) → Suggestion Generator → Notification
-- **Gemini output**: Detailed analysis of priority overload with root cause and recommendation
+**Violation Path** (proactive — thresholds triggered, suggestions generated):
+https://smith.langchain.com/public/3f9912f3-b3f8-46f2-a9ba-4fea56065d4a/r
 
-### Trace 3: On-Demand Chat
-- **Question**: "What are the biggest risks on this project?"
-- **Project**: Direct File — Free Filing Platform
-- **Path**: Trigger → User → Fetch → Gemini (ON_DEMAND) → Notification
-- **Gemini output**: Risk analysis referencing specific issue IDs, assignees, and priority distribution
+**Clean/On-Demand Path** (no thresholds, Gemini answers directly):
+https://smith.langchain.com/public/ccfa67d3-900f-4c3c-a977-58fcba4fd65b/r
+
+### Trace Details
+
+| # | Use Case | Gemini Mode | Violations | Suggestions | Path |
+|---|----------|-------------|------------|-------------|------|
+| 1 | Director Overview | DIRECTOR_OVERVIEW | 0 | 0 | Fetch → Threshold → Gemini → Notification |
+| 2 | PM Alert (in-progress overload) | PROACTIVE_VIOLATIONS | 1 | 1 | Fetch → Threshold → Gemini → Suggestions → Notification |
+| 3 | Engineer Nudge (stale issues) | PROACTIVE_VIOLATIONS | 3 | 3 | Fetch → Threshold → Gemini → Suggestions → Notification |
+| 4 | Morning Briefing | DIRECTOR_OVERVIEW | 1 | 1 | Fetch → Threshold → Gemini → Suggestions → Notification |
+| 5 | Project Kickoff | PROJECT_KICKOFF | 0 | 0 | Fetch → Gemini → Notification |
+| 6 | Coach | COACH | 0 | 0 | Person Fetch + History → Gemini → Notification |
+| 7 | Retro Autopilot | ON_DEMAND | 0 | 0 | Fetch → Gemini → Notification |
+| 8 | Load Balancer | LOAD_BALANCER | 0 | 0 | Fetch → Gemini → Notification |
 
 ## Technology Stack
 
