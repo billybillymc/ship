@@ -70,9 +70,32 @@ export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && (
-          <p className="text-sm text-muted text-center mt-8">
-            Ask FleetGraph about {context?.title ?? 'your workspace'}
-          </p>
+          <div className="mt-4 space-y-4">
+            <p className="text-sm text-muted text-center">
+              FleetGraph AI — {context?.title ?? 'your workspace'}
+            </p>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted px-1">Ask a question or run a command:</p>
+              {[
+                { label: 'Run a health check on this project', desc: 'Thresholds + suggestions' },
+                { label: 'Give me my morning briefing', desc: 'Portfolio risk overview' },
+                { label: 'Check for stale issues', desc: 'Find overdue items' },
+                { label: 'Scan all programs for risk', desc: 'Cross-program analysis' },
+                { label: 'Balance the workload on this team', desc: 'Reassignment suggestions' },
+                { label: 'What are my work patterns?', desc: 'Coach mode' },
+                { label: 'Draft a retrospective', desc: 'From completed work' },
+              ].map(item => (
+                <button
+                  key={item.label}
+                  onClick={() => { setInput(''); sendMessage(item.label, context); }}
+                  className="flex w-full items-start gap-2 rounded-md border border-border/50 px-3 py-2 text-left text-sm hover:bg-border/20 transition-colors"
+                >
+                  <span className="text-foreground">{item.label}</span>
+                  <span className="ml-auto text-xs text-muted whitespace-nowrap">{item.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {messages.map((msg, i) => (
           <div
