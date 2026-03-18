@@ -173,8 +173,9 @@ https://smith.langchain.com/public/ccfa67d3-900f-4c3c-a977-58fcba4fd65b/r
 | 7 | Retro Autopilot | ON_DEMAND | 0 | 0 | Fetch → Gemini → Notification |
 | 8 | Load Balancer | LOAD_BALANCER | 0 | 0 | Fetch → Gemini → Notification |
 
-## Demo Login
+## Deployed Demo
 
+- **URL**: https://ship-app-production-1146.up.railway.app/
 - **Email**: `dev@ship.local`
 - **Password**: `admin123`
 
