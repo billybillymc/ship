@@ -102,6 +102,31 @@ flowchart TD
 **Coach (on-demand):**
 `Trigger → User → [Person Fetch ∥ History Fetch] → Gemini (COACH) → Notification`
 
+## Human-in-the-Loop
+
+Every data mutation requires human approval. The agent suggests, the human decides.
+
+### Implemented HITL Loop: Priority Change Approval
+
+1. **Detection**: The Threshold Evaluator finds "Direct File" has 9 high-priority issues (threshold: 7). This produces a `priority_overload` violation with severity 12.
+2. **Suggestion**: The Suggestion Generator maps the violation to a concrete action: demote the last high-priority issue from `high` to `medium`. Gemini provides the reasoning text explaining why.
+3. **Persistence**: The Notification Sender writes the suggestion to the `agent_actions` table with `status: 'pending'` and pushes a WebSocket notification to the target user.
+4. **User sees it**: The Action Queue UI shows a card: "Change priority: high → medium" with the Gemini explanation and three buttons: Approve, Dismiss, Snooze.
+5. **Approve**: User clicks Approve. The Ship API executes `PATCH /api/issues/:id` setting `priority: 'medium'`. The suggestion status is updated to `approved` with `resolved_at` timestamp.
+6. **Loop re-entry**: The PATCH fires an `issue:updated` WebSocket event. After the 30-second debounce, the agent re-evaluates "Direct File" — now 8 high-priority issues, still over threshold. A new suggestion is generated for the next candidate.
+7. **Dismiss/Snooze alternatives**: If the user dismisses, the suggestion is archived and won't resurface unless the count worsens. If snoozed for 24h, the hourly lifecycle cron re-evaluates after expiry — if the condition worsened, a new suggestion appears; if the same or better, it's silently archived.
+
+### What requires approval
+
+| Action | Requires Approval |
+|--------|:-:|
+| Change issue priority | Yes |
+| Change issue status | Yes |
+| Reassign issue | Yes |
+| Morning briefing (read-only) | No |
+| Coach observation (read-only) | No |
+| Retro draft (user edits before confirming) | Yes |
+
 ## Trigger Model
 
 FleetGraph uses a **hybrid trigger model** combining event-driven and scheduled approaches:
