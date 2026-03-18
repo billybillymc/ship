@@ -4,7 +4,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { useAgentChat, type ViewContext, type InlineSuggestion } from './useAgentChat';
-import { apiPatch } from '../../lib/api';
+import { useIssues } from '../../contexts/IssuesContext';
 
 interface AgentChatPanelProps {
   isOpen: boolean;
@@ -14,15 +14,15 @@ interface AgentChatPanelProps {
 
 export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps) {
   const { messages, sendMessage, isStreaming, clearChat, updateSuggestionStatus } = useAgentChat();
+  const { updateIssue } = useIssues();
 
   const handleApprove = async (msgIndex: number, sugIndex: number, suggestion: InlineSuggestion) => {
-    // For now, call the issues API directly to apply the change
     const issueId = suggestion.suggestion['issue_id'] as string;
     const field = suggestion.suggestion['field'] as string;
     const to = suggestion.suggestion['to'] as string;
     if (issueId && field && to) {
       try {
-        await apiPatch(`/api/issues/${issueId}`, { [field]: to });
+        await updateIssue(issueId, { [field]: to } as any);
         updateSuggestionStatus(msgIndex, sugIndex, 'approved');
       } catch (error) {
         console.error('Failed to apply suggestion:', error);
