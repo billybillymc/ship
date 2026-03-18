@@ -147,17 +147,30 @@ export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps
                          sug.action_type === 'status_change' ? 'Change status' :
                          sug.action_type}
                       </span>
-                      {sug.status !== 'pending' && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${
-                          sug.status === 'approved' ? 'bg-green-600/10 text-green-600' : 'bg-border text-muted'
-                        }`}>
-                          {sug.status === 'approved' ? 'Applied' : 'Dismissed'}
+                      {sug.status === 'approved' && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-green-600/10 text-green-600">
+                          Applied
+                        </span>
+                      )}
+                      {sug.status === 'dismissed' && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-border text-muted">
+                          Dismissed
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-muted">
-                      {sug.suggestion['field']} : {String(sug.suggestion['from'])} → {String(sug.suggestion['to'])}
+                      {sug.suggestion['field']}: {String(sug.suggestion['from'])} → {String(sug.suggestion['to'])}
+                      {sug.suggestion['issue_id'] && (
+                        <span className="ml-1 text-foreground/60">
+                          (issue {String(sug.suggestion['issue_id']).slice(0, 8)}...)
+                        </span>
+                      )}
                     </p>
+                    {sug.status === 'approved' && (
+                      <p className="text-xs text-green-600">
+                        Done — {sug.suggestion['field']} was changed from "{String(sug.suggestion['from'])}" to "{String(sug.suggestion['to'])}" on this issue.
+                      </p>
+                    )}
                     {sug.status === 'pending' && (
                       <div className="flex gap-2">
                         <button
