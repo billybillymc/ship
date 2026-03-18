@@ -88,6 +88,62 @@ scheduler.schedule('suggestion-lifecycle', 60 * 60 * 1000, async () => {
   await lifecycle.processExpired();
 });
 
+// Run initial scan on startup — populate the action queue with existing violations
+async function runInitialScan() {
+  console.log('[FleetGraph] Running initial scan against seed data...');
+
+  try {
+    // Get actual projects (document_type=project) from the projects API
+    const projRes = await globalThis.fetch(`${SHIP_API_URL}/api/projects`, {
+      headers: { 'Authorization': `Bearer ${AGENT_TOKEN}` },
+    });
+    const projData = await projRes.json() as any;
+    const projects = (Array.isArray(projData) ? projData : (projData.data ?? []))
+      .map((p: any) => ({ id: p.id, title: p.title ?? p.name }));
+    console.log(`[FleetGraph] Scanning ${projects.length} projects...`);
+
+    let totalViolations = 0;
+    let totalSuggestions = 0;
+
+    for (const project of projects) {
+      const runId = uuidv4();
+      try {
+        // Timeout each project scan at 30 seconds
+        const result = await Promise.race([
+          graph.invoke({
+            trigger_type: 'event',
+            trigger_payload: {
+              document_ids: [],
+              project_id: project.id,
+              assignee_ids: [],
+            },
+            target_user_id: '',
+            run_id: runId,
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000)),
+        ]) as any;
+
+        const v = result.violations?.length ?? 0;
+        const s = result.suggestions?.length ?? 0;
+        if (v > 0) {
+          console.log(`  [${project.title}] ${v} violations, ${s} suggestions`);
+          totalViolations += v;
+          totalSuggestions += s;
+        }
+      } catch (error) {
+        console.error(`  [${project.title}] scan failed:`, error instanceof Error ? error.message : error);
+      }
+    }
+
+    console.log(`[FleetGraph] Initial scan complete — ${totalViolations} violations, ${totalSuggestions} suggestions across ${projects.length} projects`);
+  } catch (error) {
+    console.error('[FleetGraph] Initial scan failed:', error instanceof Error ? error.message : error);
+  }
+}
+
+// Delay initial scan to let the API finish seeding
+setTimeout(runInitialScan, 5000);
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('FleetGraph agent shutting down...');
