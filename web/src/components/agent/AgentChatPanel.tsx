@@ -3,7 +3,8 @@
  * Overlays from the right edge, renders messages and streams responses.
  */
 import { useState, useRef, useEffect } from 'react';
-import { useAgentChat, type ViewContext } from './useAgentChat';
+import { useAgentChat, type ViewContext, type InlineSuggestion } from './useAgentChat';
+import { apiPatch } from '../../lib/api';
 
 interface AgentChatPanelProps {
   isOpen: boolean;
@@ -12,7 +13,26 @@ interface AgentChatPanelProps {
 }
 
 export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps) {
-  const { messages, sendMessage, isStreaming, clearChat } = useAgentChat();
+  const { messages, sendMessage, isStreaming, clearChat, updateSuggestionStatus } = useAgentChat();
+
+  const handleApprove = async (msgIndex: number, sugIndex: number, suggestion: InlineSuggestion) => {
+    // For now, call the issues API directly to apply the change
+    const issueId = suggestion.suggestion['issue_id'] as string;
+    const field = suggestion.suggestion['field'] as string;
+    const to = suggestion.suggestion['to'] as string;
+    if (issueId && field && to) {
+      try {
+        await apiPatch(`/api/issues/${issueId}`, { [field]: to });
+        updateSuggestionStatus(msgIndex, sugIndex, 'approved');
+      } catch (error) {
+        console.error('Failed to apply suggestion:', error);
+      }
+    }
+  };
+
+  const handleDismiss = (msgIndex: number, sugIndex: number) => {
+    updateSuggestionStatus(msgIndex, sugIndex, 'dismissed');
+  };
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -97,23 +117,67 @@ export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps
             </div>
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
+        {messages.map((msg, msgIdx) => (
+          <div key={msgIdx}>
             <div
-              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                msg.role === 'user'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-border/30 text-foreground'
-              }`}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
-              {msg.role === 'agent' && isStreaming && i === messages.length - 1 && (
-                <span className="inline-block w-1.5 h-3 bg-foreground/50 animate-pulse ml-0.5" />
-              )}
+              <div
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                  msg.role === 'user'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'bg-border/30 text-foreground'
+                }`}
+              >
+                <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+                {msg.role === 'agent' && isStreaming && msgIdx === messages.length - 1 && (
+                  <span className="inline-block w-1.5 h-3 bg-foreground/50 animate-pulse ml-0.5" />
+                )}
+              </div>
             </div>
+            {/* Inline suggestion action cards */}
+            {msg.suggestions && msg.suggestions.length > 0 && (
+              <div className="mt-2 space-y-2 ml-0">
+                <p className="text-xs font-medium text-muted">Suggested Actions:</p>
+                {msg.suggestions.map((sug, sugIdx) => (
+                  <div key={sugIdx} className="rounded-md border border-border p-2.5 text-sm space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-foreground">
+                        {sug.action_type === 'priority_change' ? 'Change priority' :
+                         sug.action_type === 'status_change' ? 'Change status' :
+                         sug.action_type}
+                      </span>
+                      {sug.status !== 'pending' && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          sug.status === 'approved' ? 'bg-green-600/10 text-green-600' : 'bg-border text-muted'
+                        }`}>
+                          {sug.status === 'approved' ? 'Applied' : 'Dismissed'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted">
+                      {sug.suggestion['field']} : {String(sug.suggestion['from'])} → {String(sug.suggestion['to'])}
+                    </p>
+                    {sug.status === 'pending' && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleApprove(msgIdx, sugIdx, sug)}
+                          className="rounded px-2.5 py-1 text-xs font-medium bg-green-600 text-white hover:bg-green-700"
+                        >
+                          Apply
+                        </button>
+                        <button
+                          onClick={() => handleDismiss(msgIdx, sugIdx)}
+                          className="rounded px-2.5 py-1 text-xs bg-border text-muted hover:bg-border/80"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         <div ref={messagesEndRef} />

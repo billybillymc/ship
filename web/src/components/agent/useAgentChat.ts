@@ -3,9 +3,17 @@
  */
 import { useState, useCallback, useRef } from 'react';
 
+export interface InlineSuggestion {
+  action_type: string;
+  severity_score?: number;
+  suggestion: Record<string, unknown>;
+  status: 'pending' | 'approved' | 'dismissed';
+}
+
 export interface ChatMessage {
   role: 'user' | 'agent';
   content: string;
+  suggestions?: InlineSuggestion[];
 }
 
 export interface ViewContext {
@@ -85,16 +93,22 @@ export function useAgentChat() {
                 return updated;
               });
             } else if (event.type === 'suggestions' && event.suggestions?.length > 0) {
-              const summary = '\n\n**Suggested Actions (' + event.count + '):**\n' +
-                event.suggestions.map((s: { action_type: string; suggestion: Record<string, unknown> }) =>
-                  `- ${s.action_type}: change ${s.suggestion['field']} from "${s.suggestion['from']}" to "${s.suggestion['to']}"`
-                ).join('\n') +
-                '\n\n_Check the Action Queue to approve or dismiss these._';
+              const inlineSuggestions: InlineSuggestion[] = event.suggestions.map(
+                (s: { action_type: string; severity_score?: number; suggestion: Record<string, unknown> }) => ({
+                  action_type: s.action_type,
+                  severity_score: s.severity_score,
+                  suggestion: s.suggestion,
+                  status: 'pending' as const,
+                })
+              );
               setMessages(prev => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
                 if (last?.role === 'agent') {
-                  updated[updated.length - 1] = { ...last, content: last.content + summary };
+                  updated[updated.length - 1] = {
+                    ...last,
+                    suggestions: [...(last.suggestions ?? []), ...inlineSuggestions],
+                  };
                 }
                 return updated;
               });
@@ -124,11 +138,24 @@ export function useAgentChat() {
     }
   }, []);
 
+  const updateSuggestionStatus = useCallback((msgIndex: number, sugIndex: number, status: 'approved' | 'dismissed') => {
+    setMessages(prev => {
+      const updated = [...prev];
+      const msg = updated[msgIndex];
+      if (msg?.suggestions?.[sugIndex]) {
+        const newSuggestions = [...msg.suggestions];
+        newSuggestions[sugIndex] = { ...newSuggestions[sugIndex]!, status };
+        updated[msgIndex] = { ...msg, suggestions: newSuggestions };
+      }
+      return updated;
+    });
+  }, []);
+
   const clearChat = useCallback(() => {
     if (abortRef.current) abortRef.current.abort();
     setMessages([]);
     setIsStreaming(false);
   }, []);
 
-  return { messages, sendMessage, isStreaming, clearChat };
+  return { messages, sendMessage, isStreaming, clearChat, updateSuggestionStatus };
 }
