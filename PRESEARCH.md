@@ -3,7 +3,7 @@
 **Framework:** LangGraph (provides conditional branching, parallel node execution, state management). All graph runs are traced via LangSmith from day one. AI reasoning is powered by the Gemini API (Google AI SDK).
 
 **Architecture principle:** Both proactive and on-demand modes run through the same LangGraph graph. The difference is the trigger, not the graph.
-
+clear
 ## Phase 1: Define Your Agent
 
 ### 1. Agent Responsibility Scoping

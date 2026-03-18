@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -91,8 +92,9 @@ const apiLimiter = rateLimit({
 export function createApp(corsOrigin: string = 'http://localhost:5173'): express.Express {
   const app = express();
 
-  // Trust proxy headers (CloudFront) for secure cookies and correct protocol detection
-  if (process.env.NODE_ENV === 'production') {
+  // Trust proxy headers for reverse proxies (CloudFront, Railway, etc.)
+  // Required for express-rate-limit to work behind any reverse proxy
+  if (process.env.NODE_ENV === 'production' || process.env.TRUST_PROXY === '1') {
     app.set('trust proxy', 1);
 
     // CloudFront with viewer_protocol_policy="redirect-to-https" always serves viewers over HTTPS.
@@ -235,6 +237,32 @@ export function createApp(corsOrigin: string = 'http://localhost:5173'): express
 
   // Agent suggestions routes (FleetGraph)
   app.use('/api/agent/suggestions', conditionalCsrf, agentSuggestionsRoutes);
+
+  // Proxy /api/agent/on-demand to the agent process (port 3001) for Railway single-port deployment
+  const AGENT_PROXY_URL = process.env.AGENT_PROXY_URL;
+  if (AGENT_PROXY_URL) {
+    app.post('/api/agent/on-demand', (req, res) => {
+      const url = new URL('/api/agent/on-demand', AGENT_PROXY_URL);
+      const proxyReq = http.request(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }, (proxyRes) => {
+        res.status(proxyRes.statusCode || 200);
+        for (const [key, value] of Object.entries(proxyRes.headers)) {
+          if (value) res.setHeader(key, value);
+        }
+        proxyRes.pipe(res);
+      });
+      proxyReq.on('error', (err) => {
+        console.error('[Agent Proxy] Error:', err.message);
+        if (!res.headersSent) {
+          res.status(502).json({ error: 'Agent service unavailable' });
+        }
+      });
+      proxyReq.write(JSON.stringify(req.body));
+      proxyReq.end();
+    });
+  }
 
   // Comments routes
   app.use('/api/documents', conditionalCsrf, documentCommentsRouter);

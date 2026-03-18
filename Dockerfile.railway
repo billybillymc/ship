@@ -1,4 +1,4 @@
-# Railway deployment: single container with Postgres + API + static frontend
+# Railway deployment: single container with Postgres + API + Agent + static frontend
 FROM node:20-slim
 
 WORKDIR /app
@@ -14,6 +14,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY api/package.json ./api/
 COPY shared/package.json ./shared/
 COPY web/package.json ./web/
+COPY agent/package.json ./agent/
 
 # Install all dependencies (need dev deps for building)
 RUN pnpm install --frozen-lockfile --ignore-scripts
@@ -22,12 +23,13 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY shared/ ./shared/
 COPY api/ ./api/
 COPY web/ ./web/
+COPY agent/ ./agent/
 
-# Build everything: shared types → API → Web frontend
-RUN pnpm build:shared && pnpm --filter @ship/api build
+# Build everything: shared types → API → Agent → Web frontend
+RUN pnpm build:shared && pnpm --filter @ship/api build && pnpm --filter @ship/agent build
 
-# Build web with empty VITE_API_URL (uses relative URLs → same-origin requests)
-RUN cd web && VITE_API_URL= npx vite build
+# Build web with empty VITE_API_URL and VITE_AGENT_URL (uses relative URLs → same-origin requests)
+RUN cd web && VITE_API_URL= VITE_AGENT_URL= npx vite build
 
 # Copy and prepare startup script (sed fixes Windows CRLF line endings)
 COPY scripts/railway-start.sh /app/start.sh
@@ -39,5 +41,7 @@ EXPOSE ${PORT:-3000}
 ENV NODE_ENV=development
 ENV DATABASE_URL=postgresql://ship:ship_dev_password@localhost:5432/ship_dev
 ENV SESSION_SECRET=railway-dev-secret-change-in-production
+ENV TRUST_PROXY=1
+ENV AGENT_PROXY_URL=http://localhost:3001
 
 CMD ["/app/start.sh"]
