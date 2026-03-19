@@ -177,6 +177,17 @@ export async function suggestionGenerator(state: FleetGraphState): Promise<Parti
 
   const suggestions = state.violations.map(v => {
     const suggestion = violationToSuggestion(v, geminiReasoning, allIssues);
+    // Resolve target_user_id from the issue's assignee if not set
+    if (!suggestion.target_user_id) {
+      const issueId = suggestion.suggestion['issue_id'] as string;
+      if (issueId) {
+        const issue = allIssues.find(i => i.id === issueId);
+        if (issue?.assignee_id) {
+          suggestion.target_user_id = issue.assignee_id;
+        }
+      }
+    }
+    // Final fallback to state target
     if (!suggestion.target_user_id) {
       suggestion.target_user_id = state.target_user_id;
     }

@@ -63,18 +63,27 @@ router.get('/', authMiddleware, async (req: Request, res: Response): Promise<voi
     const status = req.query['status'] as string | undefined;
     const userId = req.query['user_id'] as string | undefined;
 
-    // Default to current user's suggestions
-    const targetUserId = userId ?? req.userId;
+    const params: (string | undefined)[] = [];
+    let paramIndex = 1;
 
-    let query = 'SELECT * FROM agent_actions WHERE target_user_id = $1';
-    const params: (string | undefined)[] = [targetUserId];
-
-    if (status) {
-      query += ' AND status = $2';
-      params.push(status);
+    // Super-admins see all suggestions; regular users see only their own
+    let query: string;
+    if (req.isSuperAdmin) {
+      query = 'SELECT * FROM agent_actions WHERE 1=1';
+    } else {
+      const targetUserId = userId ?? req.userId;
+      query = `SELECT * FROM agent_actions WHERE target_user_id = $${paramIndex}`;
+      params.push(targetUserId);
+      paramIndex++;
     }
 
-    query += ' ORDER BY created_at DESC LIMIT 50';
+    if (status) {
+      query += ` AND status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    query += ' ORDER BY severity_score DESC NULLS LAST, created_at DESC LIMIT 50';
 
     const result = await pool.query(query, params);
     res.json({ data: result.rows });
