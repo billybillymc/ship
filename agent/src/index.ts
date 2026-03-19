@@ -136,6 +136,10 @@ async function runInitialScan() {
     }
 
     console.log(`[FleetGraph] Initial scan complete — ${totalViolations} violations, ${totalSuggestions} suggestions across ${projects.length} projects`);
+
+    // Also run a morning briefing so there's one in the queue
+    console.log('[FleetGraph] Generating initial morning briefing...');
+    await scheduler.runMorningBriefings();
   } catch (error) {
     console.error('[FleetGraph] Initial scan failed:', error instanceof Error ? error.message : error);
   }

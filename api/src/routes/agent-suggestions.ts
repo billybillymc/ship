@@ -136,17 +136,22 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
       params,
     );
 
-    // If approved, execute the suggested mutation
+    // If approved, execute the suggested mutation on the documents table
     if (status === 'approved' && action.suggestion) {
       const suggestion = typeof action.suggestion === 'string'
         ? JSON.parse(action.suggestion)
         : action.suggestion;
 
-      if (suggestion.issue_id && suggestion.field) {
-        const updateField = suggestion.field === 'state' ? 'state' : suggestion.field;
+      if (suggestion.issue_id && suggestion.field && suggestion.to) {
+        const field = suggestion.field as string;
+        // state and priority live inside properties JSONB
         await pool.query(
-          `UPDATE issues SET ${updateField} = $1, updated_at = NOW() WHERE id = $2`,
-          [suggestion.to, suggestion.issue_id],
+          `UPDATE documents SET properties = jsonb_set(properties, $1, $2), updated_at = NOW() WHERE id = $3 AND document_type = 'issue'`,
+          [
+            `{${field}}`,
+            JSON.stringify(suggestion.to),
+            suggestion.issue_id,
+          ],
         );
       }
     }
