@@ -136,25 +136,10 @@ router.patch('/:id', authMiddleware, async (req: Request, res: Response): Promis
       params,
     );
 
-    // If approved, execute the suggested mutation on the documents table
-    if (status === 'approved' && action.suggestion) {
-      const suggestion = typeof action.suggestion === 'string'
-        ? JSON.parse(action.suggestion)
-        : action.suggestion;
-
-      if (suggestion.issue_id && suggestion.field && suggestion.to) {
-        const field = suggestion.field as string;
-        // state and priority live inside properties JSONB
-        await pool.query(
-          `UPDATE documents SET properties = jsonb_set(properties, $1, $2), updated_at = NOW() WHERE id = $3 AND document_type = 'issue'`,
-          [
-            `{${field}}`,
-            JSON.stringify(suggestion.to),
-            suggestion.issue_id,
-          ],
-        );
-      }
-    }
+    // Note: the actual issue mutation (priority/status change) is executed
+    // by the frontend via PATCH /api/issues/:id BEFORE this endpoint is called.
+    // This ensures the change goes through proper validation, React Query cache
+    // invalidation, and Yjs/WebSocket broadcast so the user sees it immediately.
 
     res.json(result.rows[0]);
   } catch (error) {

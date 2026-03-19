@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiGet, apiPatch } from '../../lib/api';
+import { useIssues } from '../../contexts/IssuesContext';
 
 export interface AgentSuggestion {
   id: string;
@@ -20,6 +21,7 @@ export interface AgentSuggestion {
 export function useAgentSuggestions() {
   const [suggestions, setSuggestions] = useState<AgentSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const { updateIssue } = useIssues();
   const wsRef = useRef<WebSocket | null>(null);
 
   const fetchSuggestions = useCallback(async () => {
@@ -82,6 +84,19 @@ export function useAgentSuggestions() {
 
   const approve = useCallback(async (id: string) => {
     try {
+      // Find the suggestion to get the issue details
+      const sug = suggestions.find(s => s.id === id);
+      if (sug?.suggestion) {
+        const issueId = sug.suggestion['issue_id'] as string;
+        const field = sug.suggestion['field'] as string;
+        const to = sug.suggestion['to'] as string;
+        if (issueId && field && to) {
+          // Apply the change through the proper issues PATCH route
+          // This goes through validation, React Query cache, Yjs, WebSocket
+          await updateIssue(issueId, { [field]: to } as any);
+        }
+      }
+      // Mark suggestion as approved
       const res = await apiPatch(`/api/agent/suggestions/${id}`, { status: 'approved' });
       if (res.ok) {
         setSuggestions(prev => prev.filter(s => s.id !== id));
@@ -89,7 +104,7 @@ export function useAgentSuggestions() {
     } catch (error) {
       console.error('Failed to approve suggestion:', error);
     }
-  }, []);
+  }, [suggestions, updateIssue]);
 
   const dismiss = useCallback(async (id: string) => {
     try {
