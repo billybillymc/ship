@@ -2,6 +2,7 @@
  * AgentSuggestionsPanel — action queue showing pending agent suggestions.
  * Each card has approve/dismiss/snooze buttons.
  */
+import { useNavigate } from 'react-router-dom';
 import { useAgentSuggestions, type AgentSuggestion } from './useAgentSuggestions';
 import { AgentBriefing } from './AgentBriefing';
 
@@ -16,13 +17,15 @@ function SuggestionCard({
   onApprove,
   onDismiss,
   onSnooze,
+  onNavigate,
 }: {
   suggestion: AgentSuggestion;
   onApprove: () => void;
   onDismiss: () => void;
   onSnooze: () => void;
+  onNavigate: (path: string) => void;
 }) {
-  const { action_type, suggestion: proposed } = suggestion;
+  const { action_type, suggestion: proposed, context } = suggestion;
 
   const friendly: Record<string, string> = {
     todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review',
@@ -39,12 +42,29 @@ function SuggestionCard({
     ? `Change status: ${fmt(proposed['from'])} → ${fmt(proposed['to'])}`
     : action_type;
 
+  const projectName = (context as Record<string, unknown>)?.['project_name'] as string ?? '';
+  const projectId = (context as Record<string, unknown>)?.['project_id'] as string ?? '';
+  const issueId = proposed['issue_id'] as string ?? '';
+
   return (
     <div className="rounded-lg border border-border p-3 space-y-2">
       <div>
         <p className="text-sm font-medium text-foreground">{actionLabel}</p>
+        {projectName && (
+          <button
+            onClick={() => projectId && onNavigate(`/documents/${projectId}`)}
+            className="text-xs text-accent hover:underline mt-0.5 block text-left"
+          >
+            {projectName}
+          </button>
+        )}
         {issueTitle && (
-          <p className="text-xs text-muted mt-0.5">{issueTitle}</p>
+          <button
+            onClick={() => issueId && onNavigate(`/documents/${issueId}`)}
+            className="text-xs text-muted hover:text-foreground hover:underline mt-0.5 block text-left"
+          >
+            {issueTitle}
+          </button>
         )}
       </div>
       <div className="flex gap-2">
@@ -73,6 +93,7 @@ function SuggestionCard({
 
 export function AgentSuggestionsPanel({ isOpen, onClose, onOpenChat }: AgentSuggestionsPanelProps) {
   const { suggestions, approve, dismiss, snooze } = useAgentSuggestions();
+  const navigate = useNavigate();
 
   if (!isOpen) return null;
 
@@ -120,6 +141,7 @@ export function AgentSuggestionsPanel({ isOpen, onClose, onOpenChat }: AgentSugg
                 onApprove={() => approve(s.id)}
                 onDismiss={() => dismiss(s.id)}
                 onSnooze={() => snooze(s.id, 24)}
+                onNavigate={(path) => { navigate(path); onClose(); }}
               />
             ))
         )}

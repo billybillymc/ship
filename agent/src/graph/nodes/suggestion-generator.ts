@@ -88,7 +88,11 @@ function violationToSuggestion(
   allIssues: Issue[],
 ): PendingSuggestion {
   const base = {
-    context: violation.details,
+    context: {
+      ...violation.details,
+      project_id: violation.entity_type === 'project' ? violation.entity_id : undefined,
+      project_name: violation.entity_type === 'project' ? violation.entity_name : undefined,
+    },
     gemini_reasoning: geminiReasoning,
     severity_score: violation.severity,
   };
