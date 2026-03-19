@@ -22,8 +22,9 @@ function SuggestionCard({
   onDismiss: () => void;
   onSnooze: () => void;
 }) {
-  const { action_type, suggestion: proposed, gemini_reasoning, severity_score } = suggestion;
+  const { action_type, suggestion: proposed, severity_score } = suggestion;
 
+  const issueTitle = proposed['issue_title'] as string ?? '';
   const actionLabel = action_type === 'priority_change'
     ? `Change priority: ${proposed['from']} → ${proposed['to']}`
     : action_type === 'status_change'
@@ -33,16 +34,18 @@ function SuggestionCard({
   return (
     <div className="rounded-lg border border-border p-3 space-y-2">
       <div className="flex items-start justify-between">
-        <p className="text-sm font-medium text-foreground">{actionLabel}</p>
+        <div>
+          <p className="text-sm font-medium text-foreground">{actionLabel}</p>
+          {issueTitle && (
+            <p className="text-xs text-muted mt-0.5">{issueTitle}</p>
+          )}
+        </div>
         {severity_score != null && (
-          <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-xs text-orange-600">
+          <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-xs text-orange-600 whitespace-nowrap ml-2">
             {severity_score}
           </span>
         )}
       </div>
-      {gemini_reasoning && (
-        <p className="text-xs text-muted leading-relaxed">{gemini_reasoning}</p>
-      )}
       <div className="flex gap-2">
         <button
           onClick={onApprove}
