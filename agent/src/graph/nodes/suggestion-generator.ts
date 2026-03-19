@@ -147,16 +147,22 @@ function violationToSuggestion(
       };
     }
     case 'stale_issue': {
+      // Find the actual issue to get its current state
+      const staleIssue = allIssues.find(i => i.id === violation.details['issue_id']);
+      const currentState = staleIssue?.state ?? 'todo';
+      // Stale in_progress → move back to todo (it's stalled)
+      // Stale todo → bump priority to urgent (needs attention)
+      const isInProgress = currentState === 'in_progress';
       return {
         ...base,
-        action_type: 'status_change',
+        action_type: isInProgress ? 'status_change' : 'priority_change',
         target_user_id: '',
         suggestion: {
           issue_id: violation.details['issue_id'],
           issue_title: violation.details['issue_title'],
-          field: 'state',
-          from: 'current',
-          to: 'needs_update',
+          field: isInProgress ? 'state' : 'priority',
+          from: isInProgress ? 'in_progress' : (staleIssue?.priority ?? 'high'),
+          to: isInProgress ? 'todo' : 'urgent',
           message: `Issue "${violation.details['issue_title']}" has not been updated in ${violation.details['days_since_update']} days.`,
         },
       };
