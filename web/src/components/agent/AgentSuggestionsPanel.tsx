@@ -22,28 +22,29 @@ function SuggestionCard({
   onDismiss: () => void;
   onSnooze: () => void;
 }) {
-  const { action_type, suggestion: proposed, severity_score } = suggestion;
+  const { action_type, suggestion: proposed } = suggestion;
+
+  const friendly: Record<string, string> = {
+    todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review',
+    done: 'Done', cancelled: 'Cancelled', backlog: 'Backlog', triage: 'Triage',
+    current: 'Current', needs_update: 'Needs Update',
+    high: 'High', medium: 'Medium', low: 'Low', urgent: 'Urgent', none: 'None',
+  };
+  const fmt = (v: unknown) => friendly[String(v)] ?? String(v);
 
   const issueTitle = proposed['issue_title'] as string ?? '';
   const actionLabel = action_type === 'priority_change'
-    ? `Change priority: ${proposed['from']} → ${proposed['to']}`
+    ? `Change priority: ${fmt(proposed['from'])} → ${fmt(proposed['to'])}`
     : action_type === 'status_change'
-    ? `Change status: ${proposed['from']} → ${proposed['to']}`
+    ? `Change status: ${fmt(proposed['from'])} → ${fmt(proposed['to'])}`
     : action_type;
 
   return (
     <div className="rounded-lg border border-border p-3 space-y-2">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">{actionLabel}</p>
-          {issueTitle && (
-            <p className="text-xs text-muted mt-0.5">{issueTitle}</p>
-          )}
-        </div>
-        {severity_score != null && (
-          <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-xs text-orange-600 whitespace-nowrap ml-2">
-            {severity_score}
-          </span>
+      <div>
+        <p className="text-sm font-medium text-foreground">{actionLabel}</p>
+        {issueTitle && (
+          <p className="text-xs text-muted mt-0.5">{issueTitle}</p>
         )}
       </div>
       <div className="flex gap-2">
@@ -79,7 +80,7 @@ export function AgentSuggestionsPanel({ isOpen, onClose, onOpenChat }: AgentSugg
     <div className="fixed right-0 top-0 z-50 flex h-full w-[400px] flex-col border-l border-border bg-background shadow-lg">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold text-foreground">FleetGraph Actions</h2>
+        <h2 className="text-sm font-semibold text-foreground">Fleet AI Suggestions</h2>
         <div className="flex gap-1">
           <button
             onClick={onClose}

@@ -164,11 +164,26 @@ export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps
                       </p>
                     )}
                     <p className="text-xs text-muted">
-                      {sug.suggestion['field']}: {String(sug.suggestion['from'])} → {String(sug.suggestion['to'])}
+                      {(() => {
+                        const friendly: Record<string, string> = {
+                          todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review',
+                          done: 'Done', current: 'Current', needs_update: 'Needs Update',
+                          high: 'High', medium: 'Medium', low: 'Low', urgent: 'Urgent',
+                        };
+                        const fmt = (v: unknown) => friendly[String(v)] ?? String(v);
+                        return `${sug.suggestion['field']}: ${fmt(sug.suggestion['from'])} → ${fmt(sug.suggestion['to'])}`;
+                      })()}
                     </p>
                     {sug.status === 'approved' && (
                       <p className="text-xs text-green-600">
-                        Done — "{String(sug.suggestion['issue_title'] || 'issue')}" {sug.suggestion['field']} changed from "{String(sug.suggestion['from'])}" to "{String(sug.suggestion['to'])}".
+                        {(() => {
+                          const friendly: Record<string, string> = {
+                            todo: 'To Do', in_progress: 'In Progress', current: 'Current',
+                            needs_update: 'Needs Update', high: 'High', medium: 'Medium', low: 'Low',
+                          };
+                          const fmt = (v: unknown) => friendly[String(v)] ?? String(v);
+                          return `Done — "${String(sug.suggestion['issue_title'] || 'issue')}" ${sug.suggestion['field']} changed from "${fmt(sug.suggestion['from'])}" to "${fmt(sug.suggestion['to'])}".`;
+                        })()}
                       </p>
                     )}
                     {sug.status === 'pending' && (
