@@ -144,7 +144,7 @@ export function AgentSuggestionsPanel({ isOpen, onClose, onOpenChat }: AgentSugg
                 onApprove={() => approve(s.id)}
                 onDismiss={() => dismiss(s.id)}
                 onSnooze={() => snooze(s.id, 24)}
-                onNavigate={(path) => { navigate(path); onClose(); }}
+                onNavigate={(path) => { navigate(path); }}
               />
             ))
         )}
