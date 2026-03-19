@@ -67,12 +67,13 @@ router.get('/', authMiddleware, async (req: Request, res: Response): Promise<voi
     let paramIndex = 1;
 
     // Super-admins see all suggestions; regular users see only their own
+    // Join user name so frontend can show who the suggestion is for
     let query: string;
     if (req.isSuperAdmin) {
-      query = 'SELECT * FROM agent_actions WHERE 1=1';
+      query = 'SELECT a.*, u.name as target_user_name FROM agent_actions a LEFT JOIN users u ON u.id = a.target_user_id WHERE 1=1';
     } else {
       const targetUserId = userId ?? req.userId;
-      query = `SELECT * FROM agent_actions WHERE target_user_id = $${paramIndex}`;
+      query = `SELECT a.*, u.name as target_user_name FROM agent_actions a LEFT JOIN users u ON u.id = a.target_user_id WHERE a.target_user_id = $${paramIndex}`;
       params.push(targetUserId);
       paramIndex++;
     }

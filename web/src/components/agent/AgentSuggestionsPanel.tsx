@@ -25,7 +25,7 @@ function SuggestionCard({
   onSnooze: () => void;
   onNavigate: (path: string) => void;
 }) {
-  const { action_type, suggestion: proposed, context } = suggestion;
+  const { action_type, suggestion: proposed, context, target_user_name } = suggestion;
 
   const friendly: Record<string, string> = {
     todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review',
@@ -65,6 +65,9 @@ function SuggestionCard({
           >
             {issueTitle}
           </button>
+        )}
+        {target_user_name && (
+          <p className="text-xs text-muted/70 mt-0.5">Assigned to {target_user_name}</p>
         )}
       </div>
       <div className="flex gap-2">

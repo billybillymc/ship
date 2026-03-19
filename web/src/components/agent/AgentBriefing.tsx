@@ -27,7 +27,12 @@ export function AgentBriefing({ briefing, onDismiss }: AgentBriefingProps) {
           </svg>
           <h3 className="text-sm font-semibold text-foreground">Morning Briefing</h3>
         </div>
-        <span className="text-xs text-muted">{dateStr} {timeStr}</span>
+        <div className="text-right">
+          {briefing.target_user_name && (
+            <span className="text-xs text-muted block">For {briefing.target_user_name}</span>
+          )}
+          <span className="text-xs text-muted">{dateStr} {timeStr}</span>
+        </div>
       </div>
       <pre className="whitespace-pre-wrap text-sm text-foreground/80 font-sans leading-relaxed">
         {content}

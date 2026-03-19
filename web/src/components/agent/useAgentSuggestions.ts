@@ -13,6 +13,7 @@ export interface AgentSuggestion {
   context: Record<string, unknown>;
   suggestion: Record<string, unknown>;
   gemini_reasoning: string | null;
+  target_user_name: string | null;
   created_at: string;
 }
 
