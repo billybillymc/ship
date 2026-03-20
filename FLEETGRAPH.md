@@ -235,6 +235,32 @@ CREATE TABLE agent_actions (
 
 ## Cost Analysis
 
+### Development and Testing Costs
+
+| Item | Amount |
+|------|--------|
+| AI Model | Gemini 2.5 Flash (`@google/generative-ai`) |
+| Input tokens (estimated) | ~350k |
+| Output tokens (estimated) | ~120k |
+| Total graph invocations during development | ~200 (22 projects x ~5 scan cycles + 8 use case test runs + on-demand tests + unit/integration test runs) |
+| Gemini 2.5 Flash pricing | $0.15 / 1M input, $0.60 / 1M output |
+| Total development spend | ~$0.12 |
+
+**Methodology**: Gemini 2.5 Flash is extremely cost-efficient. Each graph run averages ~1.5-3k input tokens and ~500-1k output tokens. Development involved ~200 graph invocations across initial scans (22 projects per scan), 8 use case validation runs, on-demand chat testing, and integration tests. At Flash pricing ($0.15/1M input, $0.60/1M output), total spend is under $0.15.
+
+### Production Cost Projections
+
+| | 100 Users | 1,000 Users | 10,000 Users |
+|---|---|---|---|
+| Monthly cost | ~$3/month | ~$30/month | ~$300/month |
+
+**Assumptions:**
+- Proactive runs per project per day: ~2 (1 morning briefing + ~1 event-driven)
+- On-demand invocations per user per day: ~0.5
+- Average tokens per invocation: ~2k input, ~750 output
+- Cost per run: ~$0.0008 (Gemini 2.5 Flash)
+- Estimated runs per day at 100 users: ~60 (20 briefings + 30 event-driven + 10 on-demand)
+
 ### Token Budget per Invocation
 
 | Invocation Type | Input Tokens | Output Tokens | Frequency |
