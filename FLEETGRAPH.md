@@ -154,24 +154,24 @@ All graph runs are traced via LangSmith with metadata: `trigger_type`, `project_
 
 ### Shared Trace Links
 
-**Violation Path** (proactive — thresholds triggered, suggestions generated):
-https://smith.langchain.com/public/3f9912f3-b3f8-46f2-a9ba-4fea56065d4a/r
+All traces are public. Each link shows the full LangGraph execution with node-by-node timing, inputs/outputs, and conditional routing.
 
-**Clean/On-Demand Path** (no thresholds, Gemini answers directly):
-https://smith.langchain.com/public/ccfa67d3-900f-4c3c-a977-58fcba4fd65b/r
+| # | Use Case | Gemini Mode | Violations | Suggestions | Trace Link |
+|---|----------|-------------|------------|-------------|------------|
+| 1 | Director Overview | DIRECTOR_OVERVIEW | 0 | 0 | [View Trace](https://smith.langchain.com/public/6945189a-b7fe-44d5-883b-412ebb3068a8/r) |
+| 2 | PM Alert (in-progress overload) | PROACTIVE_VIOLATIONS | 1 | 1 | [View Trace](https://smith.langchain.com/public/95a871d6-2adf-49e6-ac1f-1a6555ce7483/r) |
+| 3 | Engineer Nudge (stale issues) | PROACTIVE_VIOLATIONS | 3 | 3 | [View Trace](https://smith.langchain.com/public/d14d9859-55b3-46e9-8f4a-985aeb532309/r) |
+| 4 | Morning Briefing | DIRECTOR_OVERVIEW | 1 | 1 | [View Trace](https://smith.langchain.com/public/a15211a5-ea9d-4bdf-965a-357a0a42d7ea/r) |
+| 5 | Project Kickoff | PROJECT_KICKOFF | 0 | 0 | [View Trace](https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r) |
+| 6 | Coach | COACH | 0 | 0 | [View Trace](https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r) |
+| 7 | Retro Autopilot | ON_DEMAND | 0 | 0 | [View Trace](https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r) |
+| 8 | Load Balancer | LOAD_BALANCER | 0 | 0 | [View Trace](https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r) |
 
-### Trace Details
-
-| # | Use Case | Gemini Mode | Violations | Suggestions | Path |
-|---|----------|-------------|------------|-------------|------|
-| 1 | Director Overview | DIRECTOR_OVERVIEW | 0 | 0 | Fetch → Threshold → Gemini → Notification |
-| 2 | PM Alert (in-progress overload) | PROACTIVE_VIOLATIONS | 1 | 1 | Fetch → Threshold → Gemini → Suggestions → Notification |
-| 3 | Engineer Nudge (stale issues) | PROACTIVE_VIOLATIONS | 3 | 3 | Fetch → Threshold → Gemini → Suggestions → Notification |
-| 4 | Morning Briefing | DIRECTOR_OVERVIEW | 1 | 1 | Fetch → Threshold → Gemini → Suggestions → Notification |
-| 5 | Project Kickoff | PROJECT_KICKOFF | 0 | 0 | Fetch → Gemini → Notification |
-| 6 | Coach | COACH | 0 | 0 | Person Fetch + History → Gemini → Notification |
-| 7 | Retro Autopilot | ON_DEMAND | 0 | 0 | Fetch → Gemini → Notification |
-| 8 | Load Balancer | LOAD_BALANCER | 0 | 0 | Fetch → Gemini → Notification |
+**Additional traces from initial proactive scan (event-driven):**
+- [Payment Integrity scan](https://smith.langchain.com/public/d6c4e05a-02f4-4348-87c6-4efcd482684a/r) — in-progress overload detected
+- [Direct File scan](https://smith.langchain.com/public/8322b8f3-5afa-4148-a251-da43bfb0cd3f/r) — priority overload detected
+- [IMF Migration scan](https://smith.langchain.com/public/9389e208-da87-4508-8233-9666083e4ce0/r) — 3 stale issues detected
+- [Clean project scan](https://smith.langchain.com/public/4990491a-9b30-4c0d-b55c-e79756bcdaad/r) — no violations, health summary only
 
 ## Deployed Demo
 
