@@ -97,23 +97,28 @@ export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted px-1">Ask a question or run a command:</p>
               {[
-                { label: 'Run a health check on this project', desc: 'Thresholds + suggestions' },
-                { label: 'Give me my morning briefing', desc: 'Portfolio risk overview' },
-                { label: 'Check for stale issues', desc: 'Find overdue items' },
-                { label: 'Scan all programs for risk', desc: 'Cross-program analysis' },
-                { label: 'Balance the workload on this team', desc: 'Reassignment suggestions' },
-                { label: 'What are my work patterns?', desc: 'Coach mode' },
-                { label: 'Draft a retrospective', desc: 'From completed work' },
-              ].map(item => (
+                { label: 'Run a health check on this project', desc: 'Thresholds + suggestions', requiresProject: true },
+                { label: 'Give me my morning briefing', desc: 'Portfolio risk overview', requiresProject: false },
+                { label: 'Check for stale issues', desc: 'Find overdue items', requiresProject: true },
+                { label: 'Scan all programs for risk', desc: 'Cross-program analysis', requiresProject: false },
+                { label: 'Balance the workload on this team', desc: 'Reassignment suggestions', requiresProject: false },
+                { label: 'What are my work patterns?', desc: 'Coach mode', requiresProject: false },
+                { label: 'Draft a retrospective', desc: 'From completed work', requiresProject: false },
+              ].map(item => {
+                const dimmed = item.requiresProject && context?.document_type !== 'project';
+                return (
                 <button
                   key={item.label}
                   onClick={() => { setInput(''); sendMessage(item.label, context); }}
-                  className="flex w-full items-start gap-2 rounded-md border border-border/50 px-3 py-2 text-left text-sm hover:bg-border/20 transition-colors"
+                  className={`flex w-full items-start gap-2 rounded-md border border-border/50 px-3 py-2 text-left text-sm transition-colors ${
+                    dimmed ? 'opacity-40 hover:opacity-60' : 'hover:bg-border/20'
+                  }`}
                 >
-                  <span className="text-foreground">{item.label}</span>
+                  <span className={dimmed ? 'text-muted' : 'text-foreground'}>{item.label}</span>
                   <span className="ml-auto text-xs text-muted whitespace-nowrap">{item.desc}</span>
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
