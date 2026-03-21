@@ -101,9 +101,9 @@ export function AgentChatPanel({ isOpen, onClose, context }: AgentChatPanelProps
                 { label: 'Give me my morning briefing', desc: 'Portfolio risk overview', requiresProject: false },
                 { label: 'Check for stale issues', desc: 'Find overdue items', requiresProject: true },
                 { label: 'Scan all programs for risk', desc: 'Cross-program analysis', requiresProject: false },
-                { label: 'Balance the workload on this team', desc: 'Reassignment suggestions', requiresProject: false },
+                { label: 'Balance the workload on this team', desc: 'Reassignment suggestions', requiresProject: true },
                 { label: 'What are my work patterns?', desc: 'Coach mode', requiresProject: false },
-                { label: 'Draft a retrospective', desc: 'From completed work', requiresProject: false },
+                { label: 'Draft a retrospective', desc: 'From completed work', requiresProject: true },
               ].map(item => {
                 const dimmed = item.requiresProject && context?.document_type !== 'project';
                 return (
