@@ -239,14 +239,13 @@ CREATE TABLE agent_actions (
 
 | Item | Amount |
 |------|--------|
-| AI Model | Gemini 2.5 Flash (`@google/generative-ai`) |
-| Input tokens (estimated) | ~350k |
-| Output tokens (estimated) | ~120k |
-| Total graph invocations during development | ~200 (22 projects x ~5 scan cycles + 8 use case test runs + on-demand tests + unit/integration test runs) |
-| Gemini 2.5 Flash pricing | $0.15 / 1M input, $0.60 / 1M output |
-| Total development spend | ~$0.12 |
+| Development tool | Claude Code (Claude Opus via CLI) |
+| Claude Code usage | Never exceeded ~30% of weekly allocation |
+| Estimated Claude Code cost | < $5 for the entire week |
+| Gemini 2.5 Flash (agent runtime) | ~$0.12 total (~200 graph invocations during dev/testing) |
+| Total development spend | **< $5** |
 
-**Methodology**: Gemini 2.5 Flash is extremely cost-efficient. Each graph run averages ~1.5-3k input tokens and ~500-1k output tokens. Development involved ~200 graph invocations across initial scans (22 projects per scan), 8 use case validation runs, on-demand chat testing, and integration tests. At Flash pricing ($0.15/1M input, $0.60/1M output), total spend is under $0.15.
+**Methodology**: All development was done via Claude Code (Anthropic's CLI agent). Usage stayed well under the weekly allocation cap — never exceeded ~30% at any point. The agent itself calls Gemini 2.5 Flash at runtime, which is essentially free at development scale ($0.15/1M input tokens). Total Gemini spend across all test runs, initial scans, and use case validation was under $0.15.
 
 ### Production Cost Projections
 
