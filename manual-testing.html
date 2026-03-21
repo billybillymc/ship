@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FleetGraph — Manual Testing Checklist</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 40px; max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 28px; margin-bottom: 8px; }
+  .subtitle { color: #64748b; margin-bottom: 32px; font-size: 15px; }
+  .login { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 32px; font-size: 14px; }
+  .login code { background: #334155; padding: 2px 6px; border-radius: 4px; color: #fbbf24; }
+  .test { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin-bottom: 16px; transition: border-color 0.2s; }
+  .test.pass { border-color: #22c55e; }
+  .test.fail { border-color: #ef4444; }
+  .test-header { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .test-number { background: #334155; color: #94a3b8; width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+  .test.pass .test-number { background: #14532d; color: #4ade80; }
+  .test.fail .test-number { background: #450a0a; color: #f87171; }
+  .test-title { font-size: 15px; font-weight: 600; flex: 1; }
+  .test-tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+  .tag-proactive { background: #422006; color: #fbbf24; }
+  .tag-ondemand { background: #1e3a5f; color: #60a5fa; }
+  .tag-hitl { background: #14532d; color: #4ade80; }
+  .tag-guard { background: #2e1065; color: #a78bfa; }
+  .tag-ui { background: #431407; color: #fb923c; }
+  .test-body { margin-top: 16px; display: none; }
+  .test.open .test-body { display: block; }
+  .step { display: flex; gap: 12px; margin-bottom: 12px; font-size: 14px; line-height: 1.6; }
+  .step-num { color: #64748b; font-weight: 600; flex-shrink: 0; width: 20px; }
+  .step-text { color: #cbd5e1; }
+  .step-text strong { color: #f8fafc; }
+  .expect { background: #0f2a1e; border: 1px solid #166534; border-radius: 6px; padding: 12px; margin-top: 12px; font-size: 13px; color: #86efac; }
+  .expect::before { content: '✓ Expected: '; font-weight: 600; }
+  .buttons { display: flex; gap: 8px; margin-top: 16px; }
+  .btn { padding: 6px 14px; border-radius: 6px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-pass { background: #166534; color: #4ade80; }
+  .btn-pass:hover { background: #14532d; }
+  .btn-fail { background: #7f1d1d; color: #fca5a5; }
+  .btn-fail:hover { background: #991b1b; }
+  .btn-reset { background: #334155; color: #94a3b8; }
+  .btn-reset:hover { background: #475569; }
+  .summary { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin-top: 32px; text-align: center; }
+  .summary-counts { display: flex; justify-content: center; gap: 32px; margin-top: 12px; }
+  .summary-count { font-size: 32px; font-weight: 700; }
+  .summary-count.green { color: #4ade80; }
+  .summary-count.red { color: #f87171; }
+  .summary-count.gray { color: #64748b; }
+  .summary-label { font-size: 12px; color: #64748b; }
+  .uc-label { font-size: 11px; color: #64748b; margin-left: 4px; }
+</style>
+</head>
+<body>
+
+<h1>FleetGraph Manual Testing</h1>
+<p class="subtitle">12 tests covering all 8 use cases, HITL loop, guardrails, and UI persistence</p>
+
+<div class="login">
+  Open <strong>http://localhost:5173</strong> &mdash; Login: <code>dev@ship.local</code> / <code>admin123</code><br>
+  Wait ~2.5 minutes after startup for the initial scan to populate the action queue.
+</div>
+
+<div id="tests"></div>
+<div class="summary" id="summary">
+  <div style="font-size: 16px; font-weight: 600;">Test Results</div>
+  <div class="summary-counts">
+    <div><div class="summary-count green" id="pass-count">0</div><div class="summary-label">Passed</div></div>
+    <div><div class="summary-count red" id="fail-count">0</div><div class="summary-label">Failed</div></div>
+    <div><div class="summary-count gray" id="remaining-count">12</div><div class="summary-label">Remaining</div></div>
+  </div>
+  <div style="margin-top: 16px;"><button class="btn btn-reset" onclick="resetAll()">Reset All</button></div>
+</div>
+
+<script>
+const tests = [
+  {
+    id: 1, uc: 'UC2', tag: 'proactive', tagLabel: 'Proactive',
+    title: 'Action Queue — Pre-populated Suggestions',
+    steps: [
+      'Click the <strong>beaker icon</strong> (bottom of left rail, below chat icon)',
+      'The <strong>Fleet AI Suggestions</strong> panel opens on the right',
+    ],
+    expect: 'You see 5 pending suggestion cards from the initial scan. Each card shows an action (Change status or Change priority), a clickable project name in blue, and a clickable issue title. Three buttons: Approve, Dismiss, Snooze 24h.',
+  },
+  {
+    id: 2, uc: 'UC2', tag: 'hitl', tagLabel: 'HITL',
+    title: 'Approve a Suggestion — Priority Change',
+    steps: [
+      'In the Fleet AI Suggestions panel, find <strong>"Change priority: High → Medium"</strong> for Direct File',
+      'Note the issue title shown on the card',
+      'Click <strong>Approve</strong>',
+      'Click the <strong>issue title</strong> on any remaining card to navigate to that issue',
+    ],
+    expect: 'The approved card disappears. Navigate to the Direct File project — the issue should now show Medium priority instead of High.',
+  },
+  {
+    id: 3, uc: 'UC3', tag: 'hitl', tagLabel: 'HITL',
+    title: 'Approve a Suggestion — Status Change (Stale Issue)',
+    steps: [
+      'In the suggestions panel, find a card for <strong>Individual Master File Migration</strong>',
+      'It should say "Change status: In Progress → To Do" or "Change priority: High → Urgent"',
+      'Click <strong>Approve</strong>',
+      'Click the <strong>project name</strong> to navigate to IMF Migration',
+    ],
+    expect: 'The card disappears. The issue\'s status or priority has changed in Ship. You can verify by opening the issue.',
+  },
+  {
+    id: 4, uc: 'UC3', tag: 'hitl', tagLabel: 'HITL',
+    title: 'Dismiss and Snooze Suggestions',
+    steps: [
+      'Click <strong>Dismiss</strong> on one suggestion card — it disappears',
+      'Click <strong>Snooze 24h</strong> on another — it disappears',
+      'Refresh the page (F5) and reopen the suggestions panel',
+    ],
+    expect: 'Dismissed and snoozed items stay gone after refresh. They are persisted in the database.',
+  },
+  {
+    id: 5, uc: 'UC2', tag: 'ondemand', tagLabel: 'On-Demand',
+    title: 'Chat — Health Check with Inline Actions',
+    steps: [
+      'Navigate to <strong>Programs → BFS → Payment Integrity & Fraud Prevention</strong>',
+      'Click the <strong>chat icon</strong> (speech bubble, above beaker)',
+      'Click <strong>"Run a health check on this project"</strong>',
+      'Wait for the response to finish streaming',
+    ],
+    expect: 'Response mentions 6 in-progress issues exceeding threshold of 5. Below the text, you see a Suggested Actions card with "Change status: In Progress → To Do" showing the issue title, with Apply and Dismiss buttons.',
+  },
+  {
+    id: 6, uc: 'UC2', tag: 'hitl', tagLabel: 'HITL',
+    title: 'Chat — Apply Inline Suggestion',
+    steps: [
+      'From Test 5, click <strong>Apply</strong> on the inline suggestion card',
+      'Navigate to the Payment Integrity project issue list',
+    ],
+    expect: 'The card shows "Applied" in green with a confirmation message showing exactly what changed. The issue\'s status in Ship has changed from In Progress to To Do.',
+  },
+  {
+    id: 7, uc: 'UC1', tag: 'ondemand', tagLabel: 'On-Demand',
+    title: 'Chat — Director Overview / Morning Briefing',
+    steps: [
+      'Open the chat panel from any page',
+      'Click <strong>"Give me my morning briefing"</strong>',
+    ],
+    expect: 'A portfolio-wide analysis streams in, mentioning Direct File (priority overload), Payment Integrity (WIP overload), and IMF Migration (stale issues) ranked by risk.',
+  },
+  {
+    id: 8, uc: 'UC6', tag: 'ondemand', tagLabel: 'On-Demand',
+    title: 'Chat — Coach Mode',
+    steps: [
+      'Open chat, type: <strong>What are the work patterns for Andrew Martinez?</strong>',
+      'Press Enter and wait for response',
+    ],
+    expect: 'Analysis of Andrew\'s workload (10 high-priority items across projects). May recommend load reduction or note insufficient weekly trend data (cold-start is correct behavior).',
+  },
+  {
+    id: 9, uc: 'UC8', tag: 'ondemand', tagLabel: 'On-Demand',
+    title: 'Chat — Load Balancer',
+    steps: [
+      'Navigate to <strong>Direct File</strong> project',
+      'Open chat, click <strong>"Balance the workload on this team"</strong>',
+    ],
+    expect: 'Compares team members (Rachel, Devon, Aisha, Carlos) by issue count and priority. Suggests specific reassignments with issue references.',
+  },
+  {
+    id: 10, uc: 'UC7', tag: 'ondemand', tagLabel: 'On-Demand',
+    title: 'Chat — Retro Autopilot',
+    steps: [
+      'Stay on <strong>Direct File</strong> project',
+      'Open chat, click <strong>"Draft a retrospective"</strong>',
+    ],
+    expect: 'Structured retro with "What Went Well" (W-2 import, 1099 support, standard deduction — the 3 done issues), "What Carried Over" (active high-priority items), and velocity notes.',
+  },
+  {
+    id: 11, uc: '', tag: 'guard', tagLabel: 'Guardrail',
+    title: 'Guardrail — Off-Topic Rejection',
+    steps: [
+      'Open chat, type: <strong>Write me a poem about databases</strong>',
+      'Press Enter',
+    ],
+    expect: 'Rejected immediately — either a 400 error message saying FleetGraph only answers project management questions, or Gemini declines and redirects to project topics.',
+  },
+  {
+    id: 12, uc: '', tag: 'ui', tagLabel: 'UI',
+    title: 'Chat Persistence',
+    steps: [
+      'Run any chat command (e.g. health check)',
+      'Close the chat panel (X button)',
+      'Reopen the chat panel',
+    ],
+    expect: 'Previous messages are still there. Click "Clear" in the header to explicitly wipe them.',
+  },
+];
+
+const container = document.getElementById('tests');
+const tagColors = { proactive: 'tag-proactive', ondemand: 'tag-ondemand', hitl: 'tag-hitl', guard: 'tag-guard', ui: 'tag-ui' };
+
+function render() {
+  container.innerHTML = tests.map(t => {
+    const state = localStorage.getItem(`test-${t.id}`) || '';
+    const stateClass = state === 'pass' ? 'pass' : state === 'fail' ? 'fail' : '';
+    return `
+      <div class="test ${stateClass}" id="test-${t.id}">
+        <div class="test-header" onclick="toggle(${t.id})">
+          <div class="test-number">${t.id}</div>
+          <div class="test-title">${t.title}${t.uc ? `<span class="uc-label">${t.uc}</span>` : ''}</div>
+          <span class="test-tag ${tagColors[t.tag]}">${t.tagLabel}</span>
+        </div>
+        <div class="test-body">
+          ${t.steps.map((s, i) => `<div class="step"><div class="step-num">${i + 1}.</div><div class="step-text">${s}</div></div>`).join('')}
+          <div class="expect">${t.expect}</div>
+          <div class="buttons">
+            <button class="btn btn-pass" onclick="mark(${t.id}, 'pass')">Pass ✓</button>
+            <button class="btn btn-fail" onclick="mark(${t.id}, 'fail')">Fail ✗</button>
+            <button class="btn btn-reset" onclick="mark(${t.id}, '')">Reset</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  updateSummary();
+}
+
+function toggle(id) {
+  document.getElementById(`test-${id}`).classList.toggle('open');
+}
+
+function mark(id, state) {
+  if (state) { localStorage.setItem(`test-${id}`, state); }
+  else { localStorage.removeItem(`test-${id}`); }
+  render();
+}
+
+function resetAll() {
+  tests.forEach(t => localStorage.removeItem(`test-${t.id}`));
+  render();
+}
+
+function updateSummary() {
+  let pass = 0, fail = 0;
+  tests.forEach(t => {
+    const s = localStorage.getItem(`test-${t.id}`);
+    if (s === 'pass') pass++;
+    if (s === 'fail') fail++;
+  });
+  document.getElementById('pass-count').textContent = pass;
+  document.getElementById('fail-count').textContent = fail;
+  document.getElementById('remaining-count').textContent = tests.length - pass - fail;
+}
+
+render();
+</script>
+</body>
+</html>
