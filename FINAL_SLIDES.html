@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FleetGraph — Test Case Walk-Through</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #4ade80;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --purple: #a78bfa;
+    --orange: #fb923c;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+  .slide {
+    display: none;
+    height: 100vh;
+    width: 100vw;
+    padding: 48px 64px;
+    flex-direction: column;
+  }
+  .slide.active { display: flex; }
+
+  h1 { font-size: 2.4rem; font-weight: 700; margin-bottom: 8px; }
+  h2 { font-size: 1.8rem; font-weight: 600; margin-bottom: 16px; color: var(--accent); }
+  h3 { font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; color: var(--muted); }
+  p, li { font-size: 1.05rem; line-height: 1.6; }
+  ul { padding-left: 24px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .subtitle { color: var(--muted); font-size: 1.2rem; margin-bottom: 32px; }
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .tag-event { background: #1e3a5f; color: var(--accent); }
+  .tag-scheduled { background: #3b2f1a; color: var(--yellow); }
+  .tag-ondemand { background: #2d1b4e; color: var(--purple); }
+  .tag-yes { background: #14532d; color: var(--green); }
+  .tag-no { background: #7f1d1d33; color: var(--red); }
+
+  .path-box {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-size: 1rem;
+    margin: 12px 0;
+    font-family: 'SF Mono', monospace;
+    line-height: 1.8;
+    white-space: pre-wrap;
+  }
+  .path-box .node { color: var(--accent); font-weight: 600; }
+  .path-box .parallel { color: var(--green); }
+  .path-box .arrow { color: var(--muted); }
+  .path-box .highlight { color: var(--yellow); font-weight: 700; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; flex: 1; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; flex: 1; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .card h3 { color: var(--accent); margin-bottom: 12px; }
+
+  .trace-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #1e3a5f;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    margin-top: 12px;
+    font-size: 0.95rem;
+    transition: background 0.15s;
+  }
+  .trace-link:hover { background: #264d73; text-decoration: none; }
+
+  .decision-box {
+    background: #1a1a2e;
+    border: 2px solid var(--yellow);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 12px 0;
+  }
+  .decision-box h4 { color: var(--yellow); margin-bottom: 8px; font-size: 1rem; }
+
+  .result-box {
+    background: #0a2e1a;
+    border: 1px solid #16a34a55;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 8px 0;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+
+  .nav {
+    position: fixed;
+    bottom: 24px;
+    right: 32px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+  .nav button {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
+  .nav button:hover { background: var(--border); }
+
+  .counter {
+    position: fixed;
+    bottom: 28px;
+    left: 32px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .flex-grow { flex: 1; overflow-y: auto; }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 0: Title -->
+<div class="slide active" id="s0">
+  <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;">
+    <h1 style="font-size:3.2rem;text-align:center;">FleetGraph</h1>
+    <p class="subtitle" style="font-size:1.5rem;text-align:center;margin-top:8px;">Ship's AI Graph Agent — Test Case Walk-Through</p>
+    <div style="margin-top:40px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center;">
+      <span class="tag tag-event">Event-Driven</span>
+      <span class="tag tag-scheduled">Scheduled</span>
+      <span class="tag tag-ondemand">On-Demand</span>
+    </div>
+    <div style="margin-top:48px;color:var(--muted);font-size:1rem;text-align:center;">
+      8 use cases &middot; 105 unit tests &middot; 12 public LangSmith traces<br>
+      LangGraph + Gemini 2.5 Flash &middot; &lt; $5 total development cost
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 1: How the Graph Decides -->
+<div class="slide" id="s1">
+  <h2>How the Graph Makes Decisions</h2>
+  <p class="subtitle">Three things to watch in every trace</p>
+  <div class="three-col flex-grow">
+    <div class="card">
+      <h3>1. Execution Path</h3>
+      <p>Which nodes ran, which were skipped, and why. Different triggers activate different fetch nodes and routing edges.</p>
+      <div style="margin-top:16px;font-size:0.9rem;color:var(--muted);">
+        <div>Event &rarr; Project + Person fetch</div>
+        <div>Scheduled &rarr; + Program fetch</div>
+        <div>Coach &rarr; Person + History fetch</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>2. Human Decision Point</h3>
+      <p>Where the agent stops and waits. Every data mutation lands in an action queue — approve, dismiss, or snooze.</p>
+      <div style="margin-top:16px;font-size:0.9rem;color:var(--muted);">
+        <div>Mutation proposed &rarr; <span style="color:var(--yellow)">WAIT</span></div>
+        <div>Read-only output &rarr; <span style="color:var(--green)">SEND</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>3. Deterministic vs AI</h3>
+      <p>Thresholds are math — zero cost, instant, unit-testable. Gemini explains <em>why</em>, never decides <em>what</em>.</p>
+      <div style="margin-top:16px;font-size:0.9rem;color:var(--muted);">
+        <div>Threshold: >7 high = violation</div>
+        <div>Gemini: "because scope creep..."</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 2: Test Case 1 — Director Overview -->
+<div class="slide" id="s2">
+  <h2>Test 1: Director Overview <span class="tag tag-scheduled">Scheduled</span></h2>
+  <div class="two-col flex-grow">
+    <div>
+      <h3>Setup</h3>
+      <p>Morning briefing cron fires. Full workspace scan — 4 programs, 12 projects, 40+ issues.</p>
+
+      <h3 style="margin-top:20px;">Execution Path</h3>
+      <div class="path-box"><span class="node">Trigger</span> <span class="arrow">&rarr;</span> <span class="node">User</span> <span class="arrow">&rarr;</span> <span class="parallel">[Project || Person || Program]</span> <span class="arrow">&rarr;</span> <span class="node">Threshold</span> <span class="arrow">&rarr;</span> <span class="node">Gemini</span> <span style="color:var(--muted);">(DIRECTOR_OVERVIEW)</span> <span class="arrow">&rarr;</span> <span class="node">Notification</span></div>
+
+      <h3 style="margin-top:20px;">What to See in the Trace</h3>
+      <ul>
+        <li>Three fetch nodes start at <strong>same timestamp</strong> (parallel fan-out)</li>
+        <li>Program Fetch activates — only happens for scheduled runs</li>
+        <li>Gemini mode: <code>DIRECTOR_OVERVIEW</code></li>
+        <li><strong>No Suggestion Generator</strong> — clean run, read-only</li>
+      </ul>
+    </div>
+    <div>
+      <div class="decision-box">
+        <h4>Human Decision: None</h4>
+        <p>Read-only briefing. No mutations proposed, no approval needed. The agent acts immediately.</p>
+      </div>
+
+      <div class="result-box">
+        <strong>Result:</strong> Portfolio health ranking. Identified weekly plan submission gaps and workload distribution across programs.
+      </div>
+
+      <a class="trace-link" href="https://smith.langchain.com/public/6945189a-b7fe-44d5-883b-412ebb3068a8/r" target="_blank">View LangSmith Trace &rarr;</a>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 3: Test Case 2 — PM Alert -->
+<div class="slide" id="s3">
+  <h2>Test 2: PM Alert — In-Progress Overload <span class="tag tag-event">Event</span></h2>
+  <div class="two-col flex-grow">
+    <div>
+      <h3>Setup</h3>
+      <p>Issue status changed on Payment Integrity. Now 6 in-progress (threshold: 5).</p>
+
+      <h3 style="margin-top:20px;">Execution Path</h3>
+      <div class="path-box"><span class="node">Trigger</span> <span class="arrow">&rarr;</span> <span class="node">User</span> <span class="arrow">&rarr;</span> <span class="parallel">[Project || Person]</span> <span class="arrow">&rarr;</span> <span class="node">Threshold</span> <span style="color:var(--red);">(1 violation)</span> <span class="arrow">&rarr;</span> <span class="node">Gemini</span> <span style="color:var(--muted);">(PROACTIVE_VIOLATIONS)</span> <span class="arrow">&rarr;</span> <span class="highlight">Suggestion Gen</span> <span class="arrow">&rarr;</span> <span class="node">Notification</span></div>
+
+      <h3 style="margin-top:20px;">What to See in the Trace</h3>
+      <ul>
+        <li>Only 2 fetch nodes — no Program Fetch (event-driven)</li>
+        <li>Threshold outputs: <code>in_progress_overload</code>, severity score</li>
+        <li>Gemini mode flips to <code>PROACTIVE_VIOLATIONS</code></li>
+        <li><strong>Suggestion Generator fires</strong> — maps violation to action</li>
+      </ul>
+    </div>
+    <div>
+      <div class="decision-box">
+        <h4>Human Decision: Approve / Dismiss / Snooze</h4>
+        <p>PM sees: "Move [issue] back to todo — 6 items in progress exceeds WIP limit of 5."</p>
+        <ul style="margin-top:8px;font-size:0.9rem;">
+          <li><strong>Approve</strong> &rarr; PATCH executes &rarr; WebSocket event &rarr; agent re-evaluates after 30s</li>
+          <li><strong>Dismiss</strong> &rarr; archived, won't resurface unless count worsens</li>
+          <li><strong>Snooze 24h</strong> &rarr; lifecycle cron re-checks after expiry</li>
+        </ul>
+      </div>
+
+      <div class="result-box">
+        <strong>Result:</strong> 1 violation detected, 1 suggestion generated with specific issue ID.
+      </div>
+
+      <a class="trace-link" href="https://smith.langchain.com/public/95a871d6-2adf-49e6-ac1f-1a6555ce7483/r" target="_blank">View LangSmith Trace &rarr;</a>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 4: Test Case 3 — Engineer Nudge -->
+<div class="slide" id="s4">
+  <h2>Test 3: Engineer Nudge — Stale Issues <span class="tag tag-event">Event</span></h2>
+  <div class="two-col flex-grow">
+    <div>
+      <h3>Setup</h3>
+      <p>Hourly staleness cron. IMF Migration: 3 issues with no update in 5+ days.</p>
+
+      <h3 style="margin-top:20px;">Execution Path</h3>
+      <div class="path-box"><span class="node">Trigger</span> <span class="arrow">&rarr;</span> <span class="node">User</span> <span class="arrow">&rarr;</span> <span class="parallel">[Project || Person]</span> <span class="arrow">&rarr;</span> <span class="node">Threshold</span> <span style="color:var(--red);">(3 violations)</span> <span class="arrow">&rarr;</span> <span class="node">Gemini</span> <span class="arrow">&rarr;</span> <span class="highlight">Suggestion Gen</span> <span class="arrow">&rarr;</span> <span class="node">Notification</span></div>
+
+      <h3 style="margin-top:20px;">What to See in the Trace</h3>
+      <ul>
+        <li>3 violations, all <code>stale_issue</code>, varying severity</li>
+        <li>3 separate suggestions — one per stale issue</li>
+        <li>Gemini provides combined staleness analysis</li>
+      </ul>
+    </div>
+    <div>
+      <div class="decision-box">
+        <h4>Human Decision: Per-Issue</h4>
+        <p>Engineer sees 3 cards. Can approve, dismiss, or snooze each independently.</p>
+        <p style="margin-top:8px;font-size:0.9rem;color:var(--muted);">Approve one (update status), dismiss another (handled offline), snooze a third (blocked).</p>
+      </div>
+
+      <div class="result-box">
+        <strong>Result:</strong> 3 stale_issue violations, 3 suggestions targeting correct issues.
+      </div>
+
+      <a class="trace-link" href="https://smith.langchain.com/public/d14d9859-55b3-46e9-8f4a-985aeb532309/r" target="_blank">View LangSmith Trace &rarr;</a>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 5: Test Case 4 — Morning Briefing -->
+<div class="slide" id="s5">
+  <h2>Test 4: Morning Briefing <span class="tag tag-scheduled">Scheduled</span></h2>
+  <div class="two-col flex-grow">
+    <div>
+      <h3>Setup</h3>
+      <p>Daily briefing for Rachel Goldberg. Direct File has priority inflation.</p>
+
+      <h3 style="margin-top:20px;">Execution Path</h3>
+      <div class="path-box"><span class="node">Trigger</span> <span class="arrow">&rarr;</span> <span class="node">User</span> <span class="arrow">&rarr;</span> <span class="parallel">[Project || Person || Program]</span> <span class="arrow">&rarr;</span> <span class="node">Threshold</span> <span style="color:var(--red);">(1 violation)</span> <span class="arrow">&rarr;</span> <span class="node">Gemini</span> <span class="arrow">&rarr;</span> <span class="highlight">Suggestion Gen</span> <span class="arrow">&rarr;</span> <span class="node">Notification</span></div>
+
+      <h3 style="margin-top:20px;">Compare with Test 1</h3>
+      <ul>
+        <li>Same scheduled path, but scoped to one user</li>
+        <li>Test 1 was clean (0 violations) &rarr; no suggestions</li>
+        <li>Test 4 has violations &rarr; <strong>Suggestion Generator fires</strong></li>
+        <li>Briefing = informational summary + actionable suggestion</li>
+      </ul>
+    </div>
+    <div>
+      <div class="decision-box">
+        <h4>Human Decision: Review Briefing + Approve/Dismiss</h4>
+        <p>Rachel reads the health summary and sees 1 pending suggestion in her queue.</p>
+      </div>
+
+      <div class="result-box">
+        <strong>Result:</strong> Direct File flagged as high-risk. Rachel's 2 high-priority items identified. 1 suggestion generated.
+      </div>
+
+      <a class="trace-link" href="https://smith.langchain.com/public/a15211a5-ea9d-4bdf-965a-357a0a42d7ea/r" target="_blank">View LangSmith Trace &rarr;</a>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 6: Test Case 5 — Project Kickoff -->
+<div class="slide" id="s6">
+  <h2>Test 5: Project Kickoff <span class="tag tag-ondemand">On-Demand</span></h2>
+  <div class="two-col flex-grow">
+    <div>
+      <h3>Setup</h3>
+      <p>User asks: "Are there orphaned issues that should become a project?"</p>
+
+      <h3 style="margin-top:20px;">Execution Path</h3>
+      <div class="path-box"><span class="node">Trigger</span> <span class="arrow">&rarr;</span> <span class="node">User</span> <span class="arrow">&rarr;</span> <span class="parallel">[Project || Person]</span> <span class="arrow">&rarr;</span> <span class="node">Gemini</span> <span style="color:var(--muted);">(PROJECT_KICKOFF)</span> <span class="arrow">&rarr;</span> <span class="node">Notification</span>
+
+<span style="color:var(--yellow);font-size:0.9rem;">No Threshold Evaluator — on-demand chat skips it</span></div>
+
+      <h3 style="margin-top:20px;">Why This Path Matters</h3>
+      <ul>
+        <li>On-demand + not a command &rarr; <strong>skips thresholds entirely</strong></li>
+        <li>Conditional edge routes directly to Gemini</li>
+        <li>No suggestions — advisory only, no mutation proposed</li>
+      </ul>
+    </div>
+    <div>
+      <div class="decision-box">
+        <h4>Human Decision: None (Advisory)</h4>
+        <p>Output is a conversation, not an action. The user decides what to do with the analysis.</p>
+      </div>
+
+      <div class="result-box">
+        <strong>Result:</strong> Correctly reported insufficient orphaned issues to justify creating a new project.
+      </div>
+
+      <a class="trace-link" href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">View LangSmith Trace &rarr;</a>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 7: Test Case 6 — Coach -->
+<div class="slide" id="s7">
+  <h2>Test 6: Coach <span class="tag tag-ondemand">On-Demand</span></h2>
+  <div class="two-col flex-grow">
+    <div>
+      <h3>Setup</h3>
+      <p>User asks: "What patterns do you see in my work?"</p>
+
+      <h3 style="margin-top:20px;">Execution Path</h3>
+      <div class="path-box"><span class="node">Trigger</span> <span class="arrow">&rarr;</span> <span class="node">User</span> <span class="arrow">&rarr;</span> <span class="parallel">[Person || <span class="highlight">History Fetch</span>]</span> <span class="arrow">&rarr;</span> <span class="node">Gemini</span> <span style="color:var(--muted);">(COACH)</span> <span class="arrow">&rarr;</span> <span class="node">Notification</span>
+
+<span style="color:var(--yellow);font-size:0.9rem;">Different fetch nodes! History Fetch replaces Project Fetch</span></div>
+
+      <h3 style="margin-top:20px;">Completely Different Path</h3>
+      <ul>
+        <li><code>isCoachQuestion()</code> routes to History Fetch</li>
+        <li>History Fetch pulls from <code>agent_actions</code> table — past suggestions, approvals, dismissals</li>
+        <li>No thresholds, no suggestions — purely AI-driven analysis</li>
+        <li>Gemini mode: <code>COACH</code> — behavioral observations</li>
+      </ul>
+    </div>
+    <div>
+      <div class="decision-box">
+        <h4>Human Decision: None (Read-Only)</h4>
+        <p>Coaching observations. The user reflects and decides whether to adjust behavior.</p>
+      </div>
+
+      <div class="result-box">
+        <strong>Result:</strong> Identified insufficient weekly data. Recommended checking back after history accumulates. <em>Honest — doesn't fabricate patterns.</em>
+      </div>
+
+      <a class="trace-link" href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">View LangSmith Trace &rarr;</a>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 8: Test Case 7 — Retro Autopilot -->
+<div class="slide" id="s8">
+  <h2>Test 7: Retro Autopilot <span class="tag tag-ondemand">On-Demand</span></h2>
+  <div class="two-col flex-grow">
+    <div>
+      <h3>Setup</h3>
+      <p>PM asks: "Draft a retro for this project." Direct File has completed issues.</p>
+
+      <h3 style="margin-top:20px;">Execution Path</h3>
+      <div class="path-box"><span class="node">Trigger</span> <span class="arrow">&rarr;</span> <span class="node">User</span> <span class="arrow">&rarr;</span> <span class="parallel">[Project || Person]</span> <span class="arrow">&rarr;</span> <span class="node">Gemini</span> <span style="color:var(--muted);">(RETRO_DRAFT)</span> <span class="arrow">&rarr;</span> <span class="node">Notification</span></div>
+
+      <h3 style="margin-top:20px;">What to See</h3>
+      <ul>
+        <li>Issues split into completed vs carryover</li>
+        <li>Gemini mode: <code>RETRO_DRAFT</code> — structured retrospective</li>
+        <li>Output goes to <code>drafts</code> in state, not <code>suggestions</code></li>
+      </ul>
+    </div>
+    <div>
+      <div class="decision-box">
+        <h4>Human Decision: Edit, Then Confirm</h4>
+        <p>The agent generates a draft. The user must review, edit, and explicitly confirm before it's saved. The agent never publishes automatically.</p>
+      </div>
+
+      <div class="result-box">
+        <strong>Result:</strong> Generated retro with completed issue IDs, assignees, priority analysis, and carryover items.
+      </div>
+
+      <a class="trace-link" href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">View LangSmith Trace &rarr;</a>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 9: Test Case 8 — Load Balancer -->
+<div class="slide" id="s9">
+  <h2>Test 8: Load Balancer <span class="tag tag-ondemand">On-Demand</span></h2>
+  <div class="two-col flex-grow">
+    <div>
+      <h3>Setup</h3>
+      <p>PM asks: "Who's overloaded? Can we rebalance?"</p>
+      <p style="color:var(--muted);font-size:0.9rem;margin-top:4px;">Rachel (2 high), Devon (3 active), Aisha (2 active), Carlos (3 active)</p>
+
+      <h3 style="margin-top:20px;">Execution Path</h3>
+      <div class="path-box"><span class="node">Trigger</span> <span class="arrow">&rarr;</span> <span class="node">User</span> <span class="arrow">&rarr;</span> <span class="parallel">[Project || Person]</span> <span class="arrow">&rarr;</span> <span class="node">Gemini</span> <span style="color:var(--muted);">(LOAD_BALANCER)</span> <span class="arrow">&rarr;</span> <span class="node">Notification</span></div>
+
+      <h3 style="margin-top:20px;">What to See</h3>
+      <ul>
+        <li>Gemini compares workload across all team members</li>
+        <li>Names specific issues and people for reassignment</li>
+        <li>Reassignment suggestions require approval</li>
+      </ul>
+    </div>
+    <div>
+      <div class="decision-box">
+        <h4>Human Decision: Per-Reassignment Approval</h4>
+        <p>"Move AUTH-42 from Alice to Frank" — each reassignment is a separate approval. The manager can approve one and reject another.</p>
+        <p style="margin-top:8px;font-size:0.9rem;color:var(--muted);">The agent never moves work without explicit consent.</p>
+      </div>
+
+      <div class="result-box">
+        <strong>Result:</strong> Compared all team members. Suggested specific rebalancing moves with per-person rationale.
+      </div>
+
+      <a class="trace-link" href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">View LangSmith Trace &rarr;</a>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 10: Summary Table -->
+<div class="slide" id="s10">
+  <h2>Execution Path Map</h2>
+  <p class="subtitle">When the agent acts, when it waits, and why</p>
+  <div class="flex-grow" style="display:flex;align-items:center;">
+    <table style="width:100%;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Use Case</th>
+          <th>Mode</th>
+          <th>Threshold?</th>
+          <th>Suggestions?</th>
+          <th>Human Approval?</th>
+          <th>Trace</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td><td>Director Overview</td>
+          <td><span class="tag tag-scheduled">Scheduled</span></td>
+          <td><span class="tag tag-yes">Yes</span></td>
+          <td><span class="tag tag-no">No (clean)</span></td>
+          <td>No — read-only</td>
+          <td><a href="https://smith.langchain.com/public/6945189a-b7fe-44d5-883b-412ebb3068a8/r" target="_blank">trace</a></td>
+        </tr>
+        <tr>
+          <td>2</td><td>PM Alert</td>
+          <td><span class="tag tag-event">Event</span></td>
+          <td><span class="tag tag-yes">Yes</span></td>
+          <td><span class="tag tag-yes">Yes (1)</span></td>
+          <td style="color:var(--yellow);">Approve / Dismiss / Snooze</td>
+          <td><a href="https://smith.langchain.com/public/95a871d6-2adf-49e6-ac1f-1a6555ce7483/r" target="_blank">trace</a></td>
+        </tr>
+        <tr>
+          <td>3</td><td>Engineer Nudge</td>
+          <td><span class="tag tag-event">Event</span></td>
+          <td><span class="tag tag-yes">Yes</span></td>
+          <td><span class="tag tag-yes">Yes (3)</span></td>
+          <td style="color:var(--yellow);">Per-issue approval</td>
+          <td><a href="https://smith.langchain.com/public/d14d9859-55b3-46e9-8f4a-985aeb532309/r" target="_blank">trace</a></td>
+        </tr>
+        <tr>
+          <td>4</td><td>Morning Briefing</td>
+          <td><span class="tag tag-scheduled">Scheduled</span></td>
+          <td><span class="tag tag-yes">Yes</span></td>
+          <td><span class="tag tag-yes">Yes (1)</span></td>
+          <td style="color:var(--yellow);">In briefing queue</td>
+          <td><a href="https://smith.langchain.com/public/a15211a5-ea9d-4bdf-965a-357a0a42d7ea/r" target="_blank">trace</a></td>
+        </tr>
+        <tr>
+          <td>5</td><td>Project Kickoff</td>
+          <td><span class="tag tag-ondemand">On-Demand</span></td>
+          <td><span class="tag tag-no">No</span></td>
+          <td><span class="tag tag-no">No</span></td>
+          <td>No — advisory</td>
+          <td><a href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">trace</a></td>
+        </tr>
+        <tr>
+          <td>6</td><td>Coach</td>
+          <td><span class="tag tag-ondemand">On-Demand</span></td>
+          <td><span class="tag tag-no">No</span></td>
+          <td><span class="tag tag-no">No</span></td>
+          <td>No — read-only</td>
+          <td><a href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">trace</a></td>
+        </tr>
+        <tr>
+          <td>7</td><td>Retro Autopilot</td>
+          <td><span class="tag tag-ondemand">On-Demand</span></td>
+          <td><span class="tag tag-no">No</span></td>
+          <td><span class="tag tag-no">No (draft)</span></td>
+          <td style="color:var(--yellow);">Edit + confirm</td>
+          <td><a href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">trace</a></td>
+        </tr>
+        <tr>
+          <td>8</td><td>Load Balancer</td>
+          <td><span class="tag tag-ondemand">On-Demand</span></td>
+          <td><span class="tag tag-no">No</span></td>
+          <td><span class="tag tag-yes">Yes</span></td>
+          <td style="color:var(--yellow);">Per-reassignment</td>
+          <td><a href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">trace</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SLIDE 11: Additional Traces -->
+<div class="slide" id="s11">
+  <h2>Additional Event-Driven Traces</h2>
+  <p class="subtitle">Initial proactive scan — 4 projects evaluated in parallel</p>
+  <div class="two-col flex-grow">
+    <div>
+      <div class="card" style="margin-bottom:16px;border-left:3px solid var(--red);">
+        <h3>Payment Integrity</h3>
+        <p>In-progress overload detected. 6 items in WIP.</p>
+        <a class="trace-link" href="https://smith.langchain.com/public/d6c4e05a-02f4-4348-87c6-4efcd482684a/r" target="_blank">View Trace &rarr;</a>
+      </div>
+      <div class="card" style="border-left:3px solid var(--red);">
+        <h3>Direct File</h3>
+        <p>Priority overload detected. 9 high-priority issues.</p>
+        <a class="trace-link" href="https://smith.langchain.com/public/8322b8f3-5afa-4148-a251-da43bfb0cd3f/r" target="_blank">View Trace &rarr;</a>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:16px;border-left:3px solid var(--yellow);">
+        <h3>IMF Migration</h3>
+        <p>3 stale issues detected. No updates in 5+ days.</p>
+        <a class="trace-link" href="https://smith.langchain.com/public/9389e208-da87-4508-8233-9666083e4ce0/r" target="_blank">View Trace &rarr;</a>
+      </div>
+      <div class="card" style="border-left:3px solid var(--green);">
+        <h3>Clean Project</h3>
+        <p>No violations. Health summary only.</p>
+        <a class="trace-link" href="https://smith.langchain.com/public/4990491a-9b30-4c0d-b55c-e79756bcdaad/r" target="_blank">View Trace &rarr;</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 12: Closing -->
+<div class="slide" id="s12">
+  <h2>Three Architectural Bets</h2>
+  <div class="three-col" style="flex:1;align-items:start;margin-top:24px;">
+    <div class="card" style="border-top:3px solid var(--accent);">
+      <h3 style="font-size:1.1rem;">Deterministic Thresholds + AI Explanation</h3>
+      <p style="margin-top:12px;">The agent never decides <em>what to do</em> based on Gemini output. Thresholds decide. Gemini explains <em>why</em>.</p>
+      <p style="margin-top:12px;color:var(--muted);font-size:0.9rem;">Auditable. Testable. 19 threshold unit tests with zero mocks.</p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--green);">
+      <h3 style="font-size:1.1rem;">Single Graph, Multiple Paths</h3>
+      <p style="margin-top:12px;">One <code>StateGraph</code> with conditional edges. No "simple mode" shortcuts. Every run produces a trace showing the path taken.</p>
+      <p style="margin-top:12px;color:var(--muted);font-size:0.9rem;">8 Gemini modes. 6 distinct execution paths. 1 graph definition.</p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--yellow);">
+      <h3 style="font-size:1.1rem;">Suggest, Never Execute</h3>
+      <p style="margin-top:12px;">Every mutation goes through the action queue. The agent surfaces information. The human decides.</p>
+      <p style="margin-top:12px;color:var(--muted);font-size:0.9rem;">Approve &middot; Dismiss &middot; Snooze — per-suggestion granularity.</p>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:40px;">
+    <p style="font-size:1.3rem;color:var(--muted);">
+      <strong style="color:var(--text);">105</strong> unit tests &middot;
+      <strong style="color:var(--text);">8</strong> use cases &middot;
+      <strong style="color:var(--text);">12</strong> public traces &middot;
+      <strong style="color:var(--text);">&lt; $5</strong> total dev cost
+    </p>
+  </div>
+</div>
+
+<!-- Navigation -->
+<div class="counter"><span id="current">1</span> / <span id="total"></span></div>
+<div class="nav">
+  <button onclick="prev()">&#8592; Prev</button>
+  <button onclick="next()">Next &#8594;</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let idx = 0;
+  document.getElementById('total').textContent = slides.length;
+
+  function show(n) {
+    slides[idx].classList.remove('active');
+    idx = Math.max(0, Math.min(n, slides.length - 1));
+    slides[idx].classList.add('active');
+    document.getElementById('current').textContent = idx + 1;
+  }
+  function next() { show(idx + 1); }
+  function prev() { show(idx - 1); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+  });
+</script>
+</body>
+</html>
