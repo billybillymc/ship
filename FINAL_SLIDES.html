@@ -151,6 +151,19 @@
   }
 
   .flex-grow { flex: 1; overflow-y: auto; }
+
+  .replicate-box {
+    background: #1a1a2e;
+    border: 1px solid var(--purple);
+    border-left: 3px solid var(--purple);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-size: 0.85rem;
+  }
+  .replicate-box h4 { color: var(--purple); margin-bottom: 8px; font-size: 0.9rem; }
+  .replicate-box ol { padding-left: 18px; margin: 0; }
+  .replicate-box li { margin-bottom: 4px; line-height: 1.5; font-size: 0.85rem; }
 </style>
 </head>
 <body>
@@ -235,6 +248,17 @@
       </div>
 
       <a class="trace-link" href="https://smith.langchain.com/public/6945189a-b7fe-44d5-883b-412ebb3068a8/r" target="_blank">View LangSmith Trace &rarr;</a>
+
+      <div class="replicate-box">
+        <h4>How to Replicate in the App</h4>
+        <ol>
+          <li>Log in at <strong>ship-app-production-1146.up.railway.app</strong> (dev@ship.local / admin123)</li>
+          <li>Click <strong>"FleetGraph Chat"</strong> (speech bubble icon) in the bottom-left icon rail</li>
+          <li>Click the quick action: <strong>"Scan all programs for risk"</strong></li>
+          <li>The agent streams a portfolio-level health overview via SSE</li>
+          <li>Alternatively: open <strong>"Fleet AI Suggestions"</strong> panel (agent icon, next to chat) to see any morning briefing card at the top</li>
+        </ol>
+      </div>
     </div>
   </div>
 </div>
@@ -274,6 +298,18 @@
       </div>
 
       <a class="trace-link" href="https://smith.langchain.com/public/95a871d6-2adf-49e6-ac1f-1a6555ce7483/r" target="_blank">View LangSmith Trace &rarr;</a>
+
+      <div class="replicate-box">
+        <h4>How to Replicate in the App</h4>
+        <ol>
+          <li>Navigate to the <strong>Payment Integrity</strong> project in the sidebar</li>
+          <li>Click <strong>"FleetGraph Chat"</strong> in the icon rail</li>
+          <li>Click: <strong>"Run a health check on this project"</strong></li>
+          <li>The agent detects the in-progress overload and streams its analysis</li>
+          <li>Open <strong>"Fleet AI Suggestions"</strong> panel &mdash; a suggestion card appears with <strong>Approve</strong> / <strong>Dismiss</strong> / <strong>Snooze 24h</strong> buttons</li>
+          <li>Click <strong>Approve</strong> to apply the change, or <strong>Dismiss</strong> to archive it</li>
+        </ol>
+      </div>
     </div>
   </div>
 </div>
@@ -308,6 +344,18 @@
       </div>
 
       <a class="trace-link" href="https://smith.langchain.com/public/d14d9859-55b3-46e9-8f4a-985aeb532309/r" target="_blank">View LangSmith Trace &rarr;</a>
+
+      <div class="replicate-box">
+        <h4>How to Replicate in the App</h4>
+        <ol>
+          <li>Navigate to the <strong>IMF Migration</strong> project in the sidebar</li>
+          <li>Click <strong>"FleetGraph Chat"</strong> in the icon rail</li>
+          <li>Click: <strong>"Check for stale issues"</strong></li>
+          <li>The agent identifies 3 issues with no recent updates and streams the analysis</li>
+          <li>Open <strong>"Fleet AI Suggestions"</strong> panel &mdash; 3 separate suggestion cards appear, one per stale issue</li>
+          <li>Each card can be approved, dismissed, or snoozed independently</li>
+        </ol>
+      </div>
     </div>
   </div>
 </div>
@@ -342,6 +390,17 @@
       </div>
 
       <a class="trace-link" href="https://smith.langchain.com/public/a15211a5-ea9d-4bdf-965a-357a0a42d7ea/r" target="_blank">View LangSmith Trace &rarr;</a>
+
+      <div class="replicate-box">
+        <h4>How to Replicate in the App</h4>
+        <ol>
+          <li>Click <strong>"Fleet AI Suggestions"</strong> (agent icon) in the bottom-left icon rail</li>
+          <li>At the top of the panel, look for the <strong>"Morning Briefing"</strong> card (sunrise icon, date/time stamp)</li>
+          <li>The briefing summarizes project health and flags risks for your projects</li>
+          <li>Below the briefing, any pending suggestions appear as action cards with <strong>Approve</strong> / <strong>Dismiss</strong> / <strong>Snooze 24h</strong></li>
+          <li>To trigger a fresh briefing on-demand: open <strong>"FleetGraph Chat"</strong> and click <strong>"Give me my morning briefing"</strong></li>
+        </ol>
+      </div>
     </div>
   </div>
 </div>
@@ -377,6 +436,18 @@
       </div>
 
       <a class="trace-link" href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">View LangSmith Trace &rarr;</a>
+
+      <div class="replicate-box">
+        <h4>How to Replicate in the App</h4>
+        <ol>
+          <li>Navigate to any page (workspace overview or a program page)</li>
+          <li>Click <strong>"FleetGraph Chat"</strong> in the icon rail</li>
+          <li>Type in the chat input: <strong>"Are there orphaned issues that should become a project?"</strong></li>
+          <li>Click <strong>Send</strong> (or press Enter)</li>
+          <li>The agent streams its analysis of orphaned work and whether a new project is warranted</li>
+          <li>This is advisory only &mdash; no suggestion cards are generated</li>
+        </ol>
+      </div>
     </div>
   </div>
 </div>
@@ -413,6 +484,17 @@
       </div>
 
       <a class="trace-link" href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">View LangSmith Trace &rarr;</a>
+
+      <div class="replicate-box">
+        <h4>How to Replicate in the App</h4>
+        <ol>
+          <li>Click <strong>"FleetGraph Chat"</strong> in the icon rail (works from any page)</li>
+          <li>Click the quick action: <strong>"What are my work patterns?"</strong></li>
+          <li>The agent fetches your history of past suggestions, approvals, and dismissals</li>
+          <li>It streams a coaching observation about your work trends</li>
+          <li>This is read-only &mdash; no action cards are generated</li>
+        </ol>
+      </div>
     </div>
   </div>
 </div>
@@ -446,6 +528,18 @@
       </div>
 
       <a class="trace-link" href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">View LangSmith Trace &rarr;</a>
+
+      <div class="replicate-box">
+        <h4>How to Replicate in the App</h4>
+        <ol>
+          <li>Navigate to the <strong>Direct File</strong> project in the sidebar</li>
+          <li>Click <strong>"FleetGraph Chat"</strong> in the icon rail</li>
+          <li>Click the quick action: <strong>"Draft a retrospective"</strong> (only fully visible when on a project page)</li>
+          <li>The agent splits the project's issues into completed vs carryover and streams a structured retro draft</li>
+          <li>Review the draft in the chat &mdash; the agent never publishes it automatically</li>
+          <li>You edit and confirm before it becomes a saved retro document</li>
+        </ol>
+      </div>
     </div>
   </div>
 </div>
@@ -481,6 +575,18 @@
       </div>
 
       <a class="trace-link" href="https://smith.langchain.com/public/f4a2bbc1-67d4-4889-b4bd-b9f77df29515/r" target="_blank">View LangSmith Trace &rarr;</a>
+
+      <div class="replicate-box">
+        <h4>How to Replicate in the App</h4>
+        <ol>
+          <li>Navigate to the <strong>Direct File</strong> project in the sidebar</li>
+          <li>Click <strong>"FleetGraph Chat"</strong> in the icon rail</li>
+          <li>Click the quick action: <strong>"Balance the workload among team members on this project"</strong> (visible when on a project page)</li>
+          <li>The agent compares workload across all team members and streams reassignment suggestions</li>
+          <li>Open <strong>"Fleet AI Suggestions"</strong> panel &mdash; each suggested reassignment appears as a separate card</li>
+          <li>Approve or dismiss each reassignment individually</li>
+        </ol>
+      </div>
     </div>
   </div>
 </div>
